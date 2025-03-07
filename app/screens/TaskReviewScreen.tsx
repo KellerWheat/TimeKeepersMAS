@@ -20,7 +20,6 @@ interface TaskItemProps {
     toggleExpansion: (id: string) => void;
     toggleEditing: (id: string, field: 'editingDescription' | 'editingDueDate') => void;
     updateTaskField: (id: string, field: 'task_description' | 'due_date', value: string) => void;
-    updateSubtaskExpectedTime: (taskId: string, subtaskIndex: number, delta: number) => void;
     reorderSubtasks: (taskId: string, newSubtasks: Subtask[]) => void;
     deleteSubtask: (taskId: string, subtaskId: string) => void;
     addSubtask: (taskId: string) => void;
@@ -35,7 +34,6 @@ const TaskItem: React.FC<TaskItemProps> = ({
                                                toggleExpansion,
                                                toggleEditing,
                                                updateTaskField,
-                                               updateSubtaskExpectedTime,
                                                reorderSubtasks,
                                                deleteSubtask,
                                                addSubtask,
@@ -53,7 +51,8 @@ const TaskItem: React.FC<TaskItemProps> = ({
     // Render each subtask with inline editing support for description
     const renderSubtask = (params: RenderItemParams<Subtask>) => {
         // Cast params to ensure index exists
-        const { item, index, drag } = params as unknown as { item: Subtask; index: number; drag: () => void; isActive: boolean };
+        const { item, drag } = params as { item: Subtask; drag: () => void; isActive: boolean };
+        const index = item.id;
         const isEditing = editingSubtaskId === item.id;
         return (
             <View style={sharedStyles.subtaskBox}>
@@ -78,14 +77,14 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 )}
                 <View style={sharedStyles.timeContainer}>
                     <TouchableOpacity
-                        onPress={() => updateSubtaskExpectedTime(task.id, index, -1)}
+                        onPress={() => updateSubtask(task.id, item.id, { expected_time: (item.expected_time || 0) - 1 })}
                         style={sharedStyles.timeButton}
                     >
                         <Text style={sharedStyles.timeButtonText}>-</Text>
                     </TouchableOpacity>
                     <Text style={sharedStyles.timeValue}>{item.expected_time} hrs</Text>
                     <TouchableOpacity
-                        onPress={() => updateSubtaskExpectedTime(task.id, index, 1)}
+                        onPress={() => updateSubtask(task.id, item.id, { expected_time: (item.expected_time || 0) + 1 })}
                         style={sharedStyles.timeButton}
                     >
                         <Text style={sharedStyles.timeButtonText}>+</Text>
@@ -174,11 +173,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
 // Main TaskReviewScreen Component
 // --------------------------
 const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { data, updateTask, addTask, removeTask, updateSubtask } = useAppData();
+    const { data, updateTask, addTask, removeTask, updateSubtask, removeSubtask, addSubtask } = useAppData();
 
     // Deduplicate and filter tasks (only "study" and "assignment")
     const uniqueTasks = Array.from(new Map(data.tasks.map(task => [task.id, task])).values());
-    const tasks = uniqueTasks.filter(task => task.type === 'study' || task.type === 'assignment');
+    const tasks = uniqueTasks.filter(task => task.type === 'test' || task.type === 'assignment');
 
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [editingFields, setEditingFields] = useState<{ [key: string]: EditingFields }>({});
@@ -201,42 +200,18 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         updateTask(id, { [field]: value });
     };
 
-    const updateSubtaskExpectedTime = (taskId: string, subtaskIndex: number, delta: number) => {
-        const task = tasks.find(t => t.id === taskId);
-        if (task) {
-            const currentTime = parseInt(task.subtasks[subtaskIndex].expected_time || '0', 10);
-            const newTime = Math.max(currentTime + delta, 0);
-            const updatedSubtasks = task.subtasks.map((subtask, idx) =>
-                idx === subtaskIndex ? { ...subtask, expected_time: newTime.toString() } : subtask
-            );
-            updateTask(taskId, { subtasks: updatedSubtasks });
-        }
-    };
-
     const reorderSubtasks = (taskId: string, newSubtasks: Subtask[]) => {
         updateTask(taskId, { subtasks: newSubtasks });
     };
 
-    const deleteSubtask = (taskId: string, subtaskId: string) => {
-        const task = tasks.find(t => t.id === taskId);
-        if (task) {
-            const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
-            updateTask(taskId, { subtasks: updatedSubtasks });
-        }
-    };
-
-    const addSubtask = (taskId: string) => {
+    const newSubtask = (taskId: string) => {
         const newSubtask = {
             id: Date.now().toString(), // ensure unique id for each subtask
             description: '',
-            expected_time: '0',
+            expected_time: 0,
             current_percentage_completed: 0,
         };
-        const task = tasks.find(t => t.id === taskId);
-        if (task) {
-            const updatedSubtasks = [...task.subtasks, newSubtask];
-            updateTask(taskId, { subtasks: updatedSubtasks });
-        }
+        addSubtask(taskId, newSubtask);
         if (!expandedTaskIds.includes(taskId)) {
             setExpandedTaskIds(prev => [...prev, taskId]);
         }
@@ -254,10 +229,9 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             toggleExpansion={toggleExpansion}
             toggleEditing={toggleEditing}
             updateTaskField={updateTaskField}
-            updateSubtaskExpectedTime={updateSubtaskExpectedTime}
             reorderSubtasks={reorderSubtasks}
-            deleteSubtask={deleteSubtask}
-            addSubtask={addSubtask}
+            deleteSubtask={removeSubtask}
+            addSubtask={newSubtask}
             deleteTask={deleteTask}
             updateSubtask={updateSubtask}
         />

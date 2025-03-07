@@ -3,7 +3,7 @@ import React, { createContext, useState, ReactNode, useContext } from 'react';
 export interface Subtask {
     id: string;
     description: string;
-    expected_time: string;
+    expected_time: number;
     current_percentage_completed: number;
 }
 
@@ -34,6 +34,7 @@ export interface AppDataContextType {
     updateData: (newData: Partial<AppData>) => void;
     removeSubtask: (taskId: string, subtaskId: string) => void;
     updateSubtask: (taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => void;
+    addSubtask: (taskId: string, newSubtask: Subtask) => void;
 }
 
 const defaultData: AppData = {
@@ -126,6 +127,20 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         }));
     };
 
+    const addSubtask = (taskId: string, newSubtask: Subtask) => {
+        setData((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map(task =>
+                task.id === taskId
+                    ? {
+                        ...task,
+                        subtasks: [...task.subtasks, newSubtask],
+                    }
+                    : task
+            ),
+        }));
+    }
+
     return (
         <AppDataContext.Provider
             value={{
@@ -139,6 +154,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                 updateData,
                 removeSubtask,
                 updateSubtask,
+                addSubtask,
             }}
         >
             {children}
