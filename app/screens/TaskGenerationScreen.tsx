@@ -30,7 +30,11 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             let allTasks: any[] = [];
             for (let course of courses) {
                 const calendarData = await fetchCourseCalendar(token, course.id);
-                const generatedTasks = await generateTasksFromData(calendarData);
+
+                let generatedTasks = []
+                if (course.id == 370663) {
+                    generatedTasks = await generateTasksFromData(calendarData);
+                }
                 allTasks = [...allTasks, ...generatedTasks];
             }
             setTasks(allTasks); // update global tasks
