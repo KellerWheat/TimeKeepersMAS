@@ -40,6 +40,50 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             setTasks(allTasks); // update global tasks
             setLoading(false);
             navigation.navigate('TaskReview');
+
+            const distributeTasksAcrossDays = (tasks: Task[]) => {
+                const startDate = new Date(); // Start from today
+                const daysMap: { [date: string]: number } = {};
+            
+                tasks.forEach((task) => {
+                    let assigned = false;
+            
+                    // Try to find a day with fewer than 2 tasks
+                    for (let i = 0; i < 30; i++) {
+                        const date = new Date(startDate);
+                        date.setDate(date.getDate() + i);
+                        const dateString = date.toISOString().split('T')[0];
+            
+                        if (!daysMap[dateString]) {
+                            daysMap[dateString] = 0;
+                        }
+            
+                        if (daysMap[dateString] < 2) {
+                            task.due_date = dateString;
+                            daysMap[dateString]++;
+                            assigned = true;
+                            break;
+                        }
+                    }
+            
+                    // If no suitable day is found, push it to the next available day
+                    if (!assigned) {
+                        const nextAvailableDate = Object.keys(daysMap).find(
+                            (key) => daysMap[key] < 2
+                        );
+                        if (nextAvailableDate) {
+                            task.due_date = nextAvailableDate;
+                            daysMap[nextAvailableDate]++;
+                        }
+                    }
+                });
+            
+                return tasks;
+            };
+            
+            
+            // After generating tasks:
+            allTasks = distributeTasksAcrossDays(allTasks);
         };
 
         processCourses();

@@ -1,15 +1,16 @@
-// screens/CalendarScreen.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData } from '@/src/context/AppDataContext';
 import { Task } from './TaskReviewScreen';
+import { useNavigation } from '@react-navigation/native';
 
 const CalendarScreen: React.FC = () => {
     const { data } = useAppData();
     const tasks = data.tasks;
     const [markedDates, setMarkedDates] = useState<{ [date: string]: any }>({});
+    const navigation = useNavigation();
 
     useEffect(() => {
         const marks: { [date: string]: any } = {};
@@ -26,10 +27,29 @@ const CalendarScreen: React.FC = () => {
         setMarkedDates(marks);
     }, [tasks]);
 
+    // Get tasks for the selected day
+    const getTasksForDate = (date: string) => {
+        return tasks.filter(task => task.due_date === date);
+    };
+
+    // Handle day press and navigate to DayViewScreen
+    const handleDayPress = (day: any) => {
+        const selectedDate = day.dateString;
+        const selectedTasks = getTasksForDate(selectedDate);
+    
+        navigation.navigate('DayView', {
+            date: selectedDate,
+            tasks: selectedTasks
+        });
+    };
+    
     return (
         <View style={localStyles.container}>
             <Text style={localStyles.title}>Your Calendar</Text>
-            <Calendar markedDates={markedDates} />
+            <Calendar
+                markedDates={markedDates}
+                onDayPress={handleDayPress}
+            />
         </View>
     );
 };

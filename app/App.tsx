@@ -1,4 +1,3 @@
-// App.tsx
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -8,6 +7,7 @@ import CoursesScreen from './screens/CoursesScreen';
 import TaskGenerationScreen from './screens/TaskGenerationScreen';
 import TaskReviewScreen from './screens/TaskReviewScreen';
 import CalendarScreen from './screens/CalendarScreen';
+import DayViewScreen from './screens/DayViewScreen';
 import { navHeader } from '@/src/sharedStyles';
 import { AppDataProvider } from '@/src/context/AppDataContext';
 
@@ -28,6 +28,7 @@ export default function App() {
                     <Stack.Screen name="TaskGeneration" component={TaskGenerationScreen} options={{ title: 'Generate Tasks' }} />
                     <Stack.Screen name="TaskReview" component={TaskReviewScreen} options={{ title: 'Review Tasks' }} />
                     <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: 'Your Calendar' }} />
+                    <Stack.Screen name="DayView" component={DayViewScreen} options={{ title: 'Tasks for the Day' }} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AppDataProvider>
