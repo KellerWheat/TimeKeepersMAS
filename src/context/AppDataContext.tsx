@@ -12,35 +12,60 @@ export interface Task {
     type: string;
     due_date: string;
     task_description: string;
-    course: string;
     subtasks: Subtask[];
-    updated_at: string;
+    documents: Document[];
+    approved_by_user: boolean;
+}
+
+export interface Document {
+    id: string;
+    title: string;
+    content: string;
+    last_updated: Date;
+    due_date: Date;
+    type: string;
+}
+
+export interface Course {
+    id: string;
+    name: string;
+    tasks: Task[];
+    documents: { [id: string]: Document };
+}
+
+export interface UserPreferences {
+    taskViewPeriodDays: number; // How many days ahead to show tasks
+    lastTaskGenerationDate?: Date; // Timestamp of last task generation
 }
 
 export interface AppData {
     token: string | null;
-    courses: any[];
-    tasks: Task[];
+    courses: Course[];
+    current_date: Date;
+    preferences: UserPreferences;
 }
 
 export interface AppDataContextType {
     data: AppData;
     setToken: (token: string) => void;
-    setCourses: (courses: any[]) => void;
-    setTasks: (tasks: Task[]) => void;
-    updateTask: (taskId: string, updatedTask: Partial<Task>) => void;
-    removeTask: (taskId: string) => void;
-    addTask: (newTask: Task) => void;
+    setCourses: (courses: Course[]) => void;
+    updateTask: (courseId: string, taskId: string, updatedTask: Partial<Task>) => void;
+    removeTask: (courseId: string, taskId: string) => void;
+    addTask: (courseId: string, newTask: Task) => void;
     updateData: (newData: Partial<AppData>) => void;
-    removeSubtask: (taskId: string, subtaskId: string) => void;
-    updateSubtask: (taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => void;
-    addSubtask: (taskId: string, newSubtask: Subtask) => void;
+    removeSubtask: (courseId: string, taskId: string, subtaskId: string) => void;
+    updateSubtask: (courseId: string, taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => void;
+    addSubtask: (courseId: string, taskId: string, newSubtask: Subtask) => void;
+    updatePreferences: (preferences: Partial<UserPreferences>) => void;
 }
 
 const defaultData: AppData = {
     token: null,
     courses: [],
-    tasks: [],
+    current_date: new Date(),
+    preferences: {
+        taskViewPeriodDays: 28 // Default to 2 weeks
+    }
 };
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -56,36 +81,53 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         setData((prev) => ({ ...prev, token }));
     };
 
-    const setCourses = (courses: any[]) => {
+    const setCourses = (courses: Course[]) => {
         setData((prev) => ({ ...prev, courses }));
     };
 
-    const setTasks = (tasks: Task[]) => {
-        setData((prev) => ({ ...prev, tasks }));
-    };
-
-    const updateTask = (taskId: string, updatedTask: Partial<Task>) => {
+    const updateTask = (courseId: string, taskId: string, updatedTask: Partial<Task>) => {
         setData((prev) => ({
             ...prev,
-            tasks: prev.tasks.map((task) =>
-                task.id === taskId
-                    ? { ...task, ...updatedTask, updated_at: new Date().toISOString() }
-                    : task
+            courses: prev.courses.map((course) =>
+                course.id === courseId
+                    ? {
+                          ...course,
+                          tasks: course.tasks.map((task) =>
+                              task.id === taskId
+                                  ? { ...task, ...updatedTask, updated_at: new Date().toISOString() }
+                                  : task
+                          ),
+                      }
+                    : course
             ),
         }));
     };
 
-    const removeTask = (taskId: string) => {
+    const removeTask = (courseId: string, taskId: string) => {
         setData((prev) => ({
             ...prev,
-            tasks: prev.tasks.filter((task) => task.id !== taskId),
+            courses: prev.courses.map((course) =>
+                course.id === courseId
+                    ? {
+                          ...course,
+                          tasks: course.tasks.filter((task) => task.id !== taskId),
+                      }
+                    : course
+            ),
         }));
     };
 
-    const addTask = (newTask: Task) => {
+    const addTask = (courseId: string, newTask: Task) => {
         setData((prev) => ({
             ...prev,
-            tasks: [...prev.tasks, newTask],
+            courses: prev.courses.map((course) =>
+                course.id === courseId
+                    ? {
+                          ...course,
+                          tasks: [...course.tasks, newTask],
+                      }
+                    : course
+            ),
         }));
     };
 
@@ -93,53 +135,79 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         setData((prev) => ({ ...prev, ...newData }));
     };
 
-    // Remove a subtask from a task, given the task's id and the subtask's id.
-    const removeSubtask = (taskId: string, subtaskId: string) => {
+    const removeSubtask = (courseId: string, taskId: string, subtaskId: string) => {
         setData((prev) => ({
             ...prev,
-            tasks: prev.tasks.map(task =>
-                task.id === taskId
+            courses: prev.courses.map((course) =>
+                course.id === courseId
                     ? {
-                        ...task,
-                        subtasks: task.subtasks.filter(subtask => subtask.id !== subtaskId),
-                    }
-                    : task
+                          ...course,
+                          tasks: course.tasks.map((task) =>
+                              task.id === taskId
+                                  ? {
+                                        ...task,
+                                        subtasks: task.subtasks.filter((subtask) => subtask.id !== subtaskId),
+                                    }
+                                  : task
+                          ),
+                      }
+                    : course
             ),
         }));
     };
 
-    // Update a subtask for a given task.
-    const updateSubtask = (taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => {
+    const updateSubtask = (courseId: string, taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => {
         setData((prev) => ({
             ...prev,
-            tasks: prev.tasks.map(task =>
-                task.id === taskId
+            courses: prev.courses.map((course) =>
+                course.id === courseId
                     ? {
-                        ...task,
-                        subtasks: task.subtasks.map(subtask =>
-                            subtask.id === subtaskId
-                                ? { ...subtask, ...updatedSubtask }
-                                : subtask
-                        ),
-                    }
-                    : task
+                          ...course,
+                          tasks: course.tasks.map((task) =>
+                              task.id === taskId
+                                  ? {
+                                        ...task,
+                                        subtasks: task.subtasks.map((subtask) =>
+                                            subtask.id === subtaskId
+                                                ? { ...subtask, ...updatedSubtask }
+                                                : subtask
+                                        ),
+                                    }
+                                  : task
+                          ),
+                      }
+                    : course
             ),
         }));
     };
 
-    const addSubtask = (taskId: string, newSubtask: Subtask) => {
+    const addSubtask = (courseId: string, taskId: string, newSubtask: Subtask) => {
         setData((prev) => ({
             ...prev,
-            tasks: prev.tasks.map(task =>
-                task.id === taskId
+            courses: prev.courses.map((course) =>
+                course.id === courseId
                     ? {
-                        ...task,
-                        subtasks: [...task.subtasks, newSubtask],
-                    }
-                    : task
+                          ...course,
+                          tasks: course.tasks.map((task) =>
+                              task.id === taskId
+                                  ? {
+                                        ...task,
+                                        subtasks: [...task.subtasks, newSubtask],
+                                    }
+                                  : task
+                          ),
+                      }
+                    : course
             ),
         }));
-    }
+    };
+
+    const updatePreferences = (preferences: Partial<UserPreferences>) => {
+        setData((prev) => ({
+            ...prev,
+            preferences: { ...prev.preferences, ...preferences }
+        }));
+    };
 
     return (
         <AppDataContext.Provider
@@ -147,7 +215,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                 data,
                 setToken,
                 setCourses,
-                setTasks,
                 updateTask,
                 removeTask,
                 addTask,
@@ -155,6 +222,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                 removeSubtask,
                 updateSubtask,
                 addSubtask,
+                updatePreferences,
             }}
         >
             {children}

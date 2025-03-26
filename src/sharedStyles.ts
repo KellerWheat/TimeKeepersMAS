@@ -21,6 +21,14 @@ interface SharedStyles {
     subtaskPlusButton: ViewStyle;
     button: ViewStyle;
     buttonText: TextStyle;
+    // Modal styles
+    modalOverlay: ViewStyle;
+    modalContent: ViewStyle;
+    modalTitle: TextStyle;
+    courseItem: ViewStyle;
+    courseItemText: TextStyle;
+    modalCloseButton: ViewStyle;
+    modalCloseButtonText: TextStyle;
 }
 
 export const sharedStyles = StyleSheet.create<SharedStyles>({
@@ -162,6 +170,45 @@ export const sharedStyles = StyleSheet.create<SharedStyles>({
         color: '#ffffff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderRadius: 10,
+        padding: 20,
+        width: '80%',
+        maxHeight: '80%',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    courseItem: {
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    courseItemText: {
+        fontSize: 16,
+    },
+    modalCloseButton: {
+        marginTop: 15,
+        padding: 10,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 5,
+        alignItems: 'center',
+    },
+    modalCloseButtonText: {
+        color: '#666',
+        fontSize: 16,
     },
 });
 
