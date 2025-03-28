@@ -91,11 +91,19 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         processedDocuments: 0,
         message: 'Loading course data...'
     });
+    // Add a flag to track if we've already handled navigation for this screen mount
+    const [hasHandledNavigation, setHasHandledNavigation] = useState<boolean>(false);
 
     useEffect(() => {
+        // If we've already handled navigation, don't run the task generation logic again
+        if (hasHandledNavigation) {
+            return;
+        }
+
         if (!token) {
             console.error("Token is null. Aborting Task Generation.");
             navigation.navigate('Login');
+            setHasHandledNavigation(true);
             return;
         }
 
@@ -103,6 +111,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
             console.log("All tasks generated successfully. Navigating to TaskReview screen.");
             setLoading(false);
             navigation.navigate('TaskReview');
+            setHasHandledNavigation(true);
         };
 
         const generateTasks = async () => {
@@ -143,6 +152,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     console.error("No courses available. Aborting task generation.");
                     setStatus({ ...status, message: 'No courses found. Please check your Canvas account.' });
                     setLoading(false);
+                    setHasHandledNavigation(true);
                     return;
                 }
 
@@ -319,11 +329,12 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     message: `Error generating tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
                 });
                 setLoading(false);
+                setHasHandledNavigation(true);
             }
         };
         
         generateTasks();
-    }, [token, navigation, setCourses, updatePreferences, preferences, courses]);
+    }, [token, navigation, setCourses, updatePreferences, preferences, courses, hasHandledNavigation, status]);
 
     if (loading) {
         return (

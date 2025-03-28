@@ -1,5 +1,6 @@
 // src/sharedStyles.ts
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { StackNavigationOptions } from '@react-navigation/stack';
 
 interface SharedStyles {
     container: ViewStyle;
@@ -21,6 +22,11 @@ interface SharedStyles {
     subtaskPlusButton: ViewStyle;
     button: ViewStyle;
     buttonText: TextStyle;
+    // Task approval styles
+    approvedTask: ViewStyle;
+    approvedIcon: TextStyle;
+    unapprovedIcon: TextStyle;
+    buttonContainer: ViewStyle;
     // Modal styles
     modalOverlay: ViewStyle;
     modalContent: ViewStyle;
@@ -171,6 +177,26 @@ export const sharedStyles = StyleSheet.create<SharedStyles>({
         fontSize: 16,
         fontWeight: '600',
     },
+    // Task approval styles
+    approvedTask: {
+        backgroundColor: '#f0fff0', // Light green background for approved tasks
+        borderLeftWidth: 4,
+        borderLeftColor: '#4CAF50',
+    },
+    approvedIcon: {
+        color: '#4CAF50', // Green checkmark
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    unapprovedIcon: {
+        color: '#9e9e9e', // Grey circle
+        fontSize: 20,
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingHorizontal: 8,
+    },
     // Modal styles
     modalOverlay: {
         flex: 1,
@@ -213,13 +239,12 @@ export const sharedStyles = StyleSheet.create<SharedStyles>({
 });
 
 // Export the nav header configuration separately
-export const navHeader = {
+export const navHeader: StackNavigationOptions = {
     headerStyle: {
         backgroundColor: '#2980b9',
     },
     headerTintColor: '#fff',
     headerTitleStyle: {
-        fontFamily: 'Avenir',
         fontWeight: 'bold',
     },
     headerTitleAlign: 'center' as 'center',

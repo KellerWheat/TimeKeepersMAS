@@ -1,10 +1,11 @@
 // screens/TaskReviewScreen.tsx
-import React, { useState } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TextInput, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, Task, Subtask, Course } from '@/src/context/AppDataContext';
 import { v4 as uuidv4 } from 'uuid';
+import { StackNavigationProps } from '../navigation';
 
 interface EditingFields {
     editingDescription: boolean;
@@ -28,6 +29,7 @@ interface TaskItemProps {
     addSubtask: (courseId: string, taskId: string) => void;
     deleteTask: (courseId: string, id: string) => void;
     updateSubtask: (courseId: string, taskId: string, subtaskId: string, updatedSubtask: Partial<Subtask>) => void;
+    toggleApproval: (courseId: string, taskId: string, approved: boolean) => void;
 }
 
 const TaskItem: React.FC<TaskItemProps> = ({
@@ -44,6 +46,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
     addSubtask,
     deleteTask,
     updateSubtask,
+    toggleApproval,
 }) => {
     const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
 
@@ -104,7 +107,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
     };
 
     return (
-        <View style={sharedStyles.taskBox}>
+        <View style={[sharedStyles.taskBox, task.approved_by_user ? sharedStyles.approvedTask : {}]}>
             <View style={sharedStyles.taskHeader}>
                 <TouchableOpacity onPress={() => toggleExpansion(task.id)} style={{ flex: 1 }}>
                     {editing?.editingDescription ? (
@@ -122,6 +125,14 @@ const TaskItem: React.FC<TaskItemProps> = ({
                             </Text>
                         </Text>
                     )}
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    onPress={() => toggleApproval(courseId, task.id, !task.approved_by_user)}
+                    style={{ marginHorizontal: 8 }}
+                >
+                    <Text style={task.approved_by_user ? sharedStyles.approvedIcon : sharedStyles.unapprovedIcon}>
+                        {task.approved_by_user ? '✓' : '○'}
+                    </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => deleteTask(courseId, task.id)}>
                     <Text style={{ color: 'red', fontSize: 16, marginLeft: 8 }}>✕</Text>
@@ -210,11 +221,17 @@ const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
 // --------------------------
 // Main TaskReviewScreen Component
 // --------------------------
-const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { data, updateTask, addTask, removeTask, updateSubtask, removeSubtask, addSubtask } = useAppData();
+type TaskReviewScreenProps = {
+    navigation: StackNavigationProps<'TaskReview'>;
+};
+
+const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
+    const { data, updateTask, addTask, removeTask, updateSubtask, removeSubtask, addSubtask, approveAllTasks, areAllTasksApproved, autoScheduleTasks, toggleTaskApproval } = useAppData();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [editingFields, setEditingFields] = useState<{ [key: string]: EditingFields }>({});
     const [showCourseModal, setShowCourseModal] = useState(false);
+    const [isScheduling, setIsScheduling] = useState(false);
+    const [hasAutoNavigated, setHasAutoNavigated] = useState(false);
 
     // Calculate the date threshold based on user preferences
     const currentDate = new Date();
@@ -241,6 +258,19 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     })
     .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
 
+    // Auto-skip to calendar if all tasks are already approved
+    useEffect(() => {
+        // Only auto-navigate if we haven't done so already and all tasks are approved
+        if (!hasAutoNavigated && areAllTasksApproved() && allTasks.length > 0) {
+            // Set the flag to prevent repeated navigation
+            setHasAutoNavigated(true);
+            
+            // If all tasks are approved, run auto-scheduling and navigate to calendar
+            autoScheduleTasks();
+            navigation.navigate('Calendar');
+        }
+    }, [areAllTasksApproved, allTasks.length, autoScheduleTasks, navigation, hasAutoNavigated]);
+
     // Helper functions for TaskItem
     const toggleExpansion = (id: string) => {
         setExpandedTaskIds(prev =>
@@ -257,6 +287,10 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
     const updateTaskField = (courseId: string, id: string, field: 'task_description' | 'due_date', value: string) => {
         updateTask(courseId, id, { [field]: value });
+    };
+
+    const toggleApproval = (courseId: string, taskId: string, approved: boolean) => {
+        toggleTaskApproval(courseId, taskId);
     };
 
     const reorderSubtasks = (courseId: string, taskId: string, newSubtasks: Subtask[]) => {
@@ -290,6 +324,19 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         setShowCourseModal(false);
     };
 
+    const handleScheduleTasks = useCallback(() => {
+        setIsScheduling(true);
+        autoScheduleTasks();
+        setTimeout(() => {
+            setIsScheduling(false);
+            navigation.navigate('Calendar');
+        }, 500); // Short delay for visual feedback
+    }, [autoScheduleTasks, navigation]);
+
+    const handleEditSchedule = useCallback(() => {
+        navigation.navigate('Schedule');
+    }, [navigation]);
+
     const renderItem = ({ item }: { item: Task & { courseId: string; courseName: string } }) => (
         <TaskItem
             task={item}
@@ -305,27 +352,93 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             addSubtask={newSubtask}
             deleteTask={removeTask}
             updateSubtask={updateSubtask}
+            toggleApproval={toggleApproval}
         />
     );
 
+    // Organize tasks by course for display
+    const tasksByCourse = data.courses.map(course => ({
+        course,
+        tasks: course.tasks.filter(task => task.due_date) // Only show tasks with due dates
+    })).filter(item => item.tasks.length > 0); // Only show courses with tasks
+
     return (
-        <View style={sharedStyles.container}>
-            <FlatList
-                data={allTasks}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                ListFooterComponent={
-                    <TouchableOpacity
-                        style={sharedStyles.taskBox}
-                        onPress={() => setShowCourseModal(true)}
-                    >
-                        <Text style={[sharedStyles.text, { color: '#2980b9' }]}>＋ New Task</Text>
-                    </TouchableOpacity>
-                }
-            />
-            <TouchableOpacity style={sharedStyles.button} onPress={() => navigation.navigate('Calendar')}>
-                <Text style={sharedStyles.buttonText}>Submit Tasks</Text>
-            </TouchableOpacity>
+        <View style={styles.container}>
+            <Text style={sharedStyles.screenTitle}>Review Your Tasks</Text>
+            
+            <View style={styles.infoContainer}>
+                <Text style={styles.infoText}>
+                    Approve the tasks you want to include in your schedule, then set your weekly availability.
+                </Text>
+                <TouchableOpacity 
+                    style={styles.scheduleButton}
+                    onPress={handleEditSchedule}
+                >
+                    <Text style={sharedStyles.buttonText}>⏰ Set Weekly Schedule</Text>
+                </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.scrollContainer}>
+                {tasksByCourse.length === 0 ? (
+                    <Text style={styles.noTasksText}>
+                        No tasks available for review. Generate tasks from your courses first.
+                    </Text>
+                ) : (
+                    tasksByCourse.map(({ course, tasks }) => (
+                        <View key={course.id} style={styles.courseSection}>
+                            <Text style={styles.courseTitle}>{course.name}</Text>
+                            
+                            {tasks.map(task => (
+                                <TouchableOpacity
+                                    key={task.id}
+                                    style={[
+                                        styles.taskItem,
+                                        task.approved_by_user && styles.approvedTask
+                                    ]}
+                                    onPress={() => toggleApproval(course.id, task.id, !task.approved_by_user)}
+                                >
+                                    <View style={styles.taskHeader}>
+                                        <Text style={styles.taskTitle}>{task.task_description}</Text>
+                                        <Text style={task.approved_by_user ? styles.approvedIcon : styles.unapprovedIcon}>
+                                            {task.approved_by_user ? '✓' : '○'}
+                                        </Text>
+                                    </View>
+                                    
+                                    <Text style={styles.taskDescription}>
+                                        {task.task_description}
+                                    </Text>
+                                    
+                                    <Text style={styles.taskDueDate}>
+                                        Due: {new Date(task.due_date).toLocaleDateString()}
+                                    </Text>
+                                    
+                                    <Text style={styles.subtasksInfo}>
+                                        {task.subtasks.length} subtasks • 
+                                        Est. {task.subtasks.reduce((sum, st) => sum + st.expected_time, 0)} hours
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    ))
+                )}
+            </ScrollView>
+            
+            <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                    style={[
+                        sharedStyles.button,
+                        styles.scheduleButton,
+                        isScheduling && styles.buttonDisabled
+                    ]}
+                    onPress={handleScheduleTasks}
+                    disabled={isScheduling}
+                >
+                    <Text style={sharedStyles.buttonText}>
+                        {isScheduling ? 'Scheduling...' : 'Schedule Approved Tasks'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+            
             <CourseSelectionModal
                 visible={showCourseModal}
                 onClose={() => setShowCourseModal(false)}
@@ -335,5 +448,106 @@ const TaskReviewScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        padding: 16,
+        backgroundColor: '#f0f4f8',
+    },
+    scrollContainer: {
+        flex: 1,
+        marginBottom: 16,
+    },
+    infoContainer: {
+        backgroundColor: '#f5f5f5',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 16,
+        alignItems: 'center',
+    },
+    infoText: {
+        fontSize: 16,
+        color: '#555',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    courseSection: {
+        marginBottom: 20,
+    },
+    courseTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+        marginBottom: 8,
+    },
+    taskItem: {
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    taskHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    taskTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
+        flex: 1,
+    },
+    approvedIcon: {
+        fontSize: 22,
+        color: '#27ae60',
+        fontWeight: 'bold',
+    },
+    unapprovedIcon: {
+        fontSize: 22,
+        color: '#7f8c8d',
+    },
+    taskDescription: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    taskDueDate: {
+        fontSize: 14,
+        color: '#e74c3c',
+        fontWeight: '500',
+        marginBottom: 4,
+    },
+    subtasksInfo: {
+        fontSize: 12,
+        color: '#7f8c8d',
+    },
+    approvedTask: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#27ae60',
+    },
+    buttonContainer: {
+        marginTop: 8,
+    },
+    scheduleButton: {
+        backgroundColor: '#009688',
+        paddingVertical: 12,
+    },
+    buttonDisabled: {
+        backgroundColor: '#95a5a6',
+    },
+    noTasksText: {
+        textAlign: 'center',
+        marginTop: 40,
+        fontSize: 16,
+        color: '#7f8c8d',
+    },
+});
 
 export default TaskReviewScreen;
