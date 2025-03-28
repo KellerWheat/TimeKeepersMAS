@@ -1,6 +1,6 @@
 // screens/CoursesScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { fetchEnrolledCourses } from '@/src/api/canvasApi';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData } from '@/src/context/AppDataContext';
@@ -54,5 +54,8 @@ const CoursesScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+});
 
 export default CoursesScreen;

@@ -2,10 +2,74 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { fetchEnrolledCourses, fetchCourseDocuments } from '@/src/api/canvasApi';
-import { processDocumentForTasks } from '@/src/api/chatgptApi';
+import { generateDocumentSummary, batchGenerateTasks, processJsonTaskResponse } from '@/src/api/llmApi';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, Task, Document, Course } from '@/src/context/AppDataContext';
 import { v4 as uuidv4 } from 'uuid';
+
+// Debug mode for testing with sample JSON
+const DEBUG_MODE = false;
+
+// Sample JSON response for testing - this is the response from the LLM that wasn't parsing correctly
+const SAMPLE_JSON_RESPONSE = `{
+  "results": [
+    {
+      "courseId": "451354",
+      "tasks": [
+        {
+          "id": "task-1",
+          "type": "assignment",
+          "due_date": "2025-01-15T14:30:00.000Z",
+          "task_description": "Discussion Post 1",
+          "subtasks": [
+            {
+              "id": "subtask-1",
+              "description": "Write two discussion questions based on the readings, with enough detail for the audience to understand and follow the questions. The questions should be rooted in evidence from the readings.",
+              "expected_time": 2,
+              "current_percentage_completed": 0
+            },
+            {
+              "id": "subtask-2",
+              "description": "Submit the discussion questions before class on Wednesday, January 15th.",
+              "expected_time": 1,
+              "current_percentage_completed": 0
+            }
+          ],
+          "documents": ["1993588"],
+          "approved_by_user": false
+        },
+        {
+          "id": "task-2",
+          "type": "assignment",
+          "due_date": "2025-01-22T14:30:00.000Z",
+          "task_description": "Discussion Post 2",
+          "subtasks": [
+            {
+              "id": "subtask-1",
+              "description": "Write a discussion question for the reading \\"Cruel Pies\\" that is rooted in evidence from the text.",
+              "expected_time": 1,
+              "current_percentage_completed": 0
+            },
+            {
+              "id": "subtask-2",
+              "description": "Briefly explain ideas for visually representing the data in Du Bois' article and the USDA Census data.",
+              "expected_time": 1,
+              "current_percentage_completed": 0
+            },
+            {
+              "id": "subtask-3",
+              "description": "Submit the assignment before class on Wednesday, January 22nd.",
+              "expected_time": 1,
+              "current_percentage_completed": 0
+            }
+          ],
+          "documents": ["2002276"],
+          "approved_by_user": false
+        }
+      ]
+    }
+  ]
+}`;
 
 interface DocumentProcessingStatus {
     totalDocuments: number;
@@ -17,7 +81,7 @@ interface DocumentProcessingStatus {
 const MIN_HOURS_BETWEEN_GENERATIONS = 24;
 
 const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { data, setCourses, updateTask, addTask, updatePreferences } = useAppData();
+    const { data, setCourses, updatePreferences } = useAppData();
     const token = data.token;
     const courses = data.courses;
     const preferences = data.preferences;
@@ -113,76 +177,49 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     
                     // Create a map of document IDs to documents
                     const documentMap: { [id: string]: Document } = {};
-                    const updatedTasks = [...course.tasks];
                     
-                    // Step 5: Process each document
+                    // Step 5: Process each document to generate summaries
                     for (const document of documents) {
-                        // Store document in the course's document collection
-                        documentMap[document.id] = document;
+                        // Skip documents with due dates in the past
+                        const currentDate = new Date();
+                        if (document.due_date && document.due_date < currentDate) {
+                            console.log(`Skipping ${document.type} "${document.title}" because due date is in the past (${document.due_date.toLocaleDateString()})`);
+                            continue;
+                        }
                         
                         // Update status with current document
                         setStatus({
                             totalDocuments,
                             processedDocuments: processedCount,
-                            message: `Processing document: ${document.title.substring(0, 30)}${document.title.length > 30 ? '...' : ''}`
+                            message: `Generating summary for: ${document.title.substring(0, 30)}${document.title.length > 30 ? '...' : ''}`
                         });
                         
-                        // Check if document is already associated with a task
-                        const existingTaskIndex = updatedTasks.findIndex(task => 
-                            task.documents.some(doc => doc.id === document.id)
-                        );
+                        // Print document details for debugging
+                        console.log(`\n=== DOCUMENT DETAILS: "${document.title}" ===`);
+                        console.log(`Type: ${document.type}`);
+                        console.log(`Due Date: ${document.due_date.toISOString()}`);
+                        console.log(`Content (first 300 chars): ${document.content.substring(0, 300).replace(/\n/g, ' ')}${document.content.length > 300 ? '...' : ''}`);
                         
-                        if (existingTaskIndex >= 0) {
-                            // Document already assigned to a task, update the task
-                            const task = updatedTasks[existingTaskIndex];
-                            
-                            // Process document for task updates via LLM
-                            const taskUpdate = await processDocumentForTasks(document, task, updatedTasks);
-                            
-                            if (taskUpdate && taskUpdate.type === 'update') {
-                                // Update the existing task
-                                updatedTasks[existingTaskIndex] = {
-                                    ...task,
-                                    ...taskUpdate.updatedTask,
-                                    approved_by_user: false,
-                                    documents: [...task.documents, document] // Add document to task if not already there
-                                };
-                            }
+                        // Check if document already exists in our data with a summary
+                        const existingDocument = course.documents[document.id];
+                        if (existingDocument && existingDocument.summary) {
+                            // Use existing document with its summary
+                            documentMap[document.id] = existingDocument;
+                            console.log(`Using existing summary: ${existingDocument.summary}`);
                         } else {
-                            // Document not yet assigned to any task, process via LLM
-                            const taskResult = await processDocumentForTasks(document, null, updatedTasks);
+                            // Generate a summary for the document
+                            const summary = await generateDocumentSummary(document);
                             
-                            if (taskResult) {
-                                if (taskResult.type === 'new') {
-                                    // Create a new task
-                                    const newTask: Task = {
-                                        id: uuidv4(),
-                                        type: taskResult.taskType || 'assignment',
-                                        due_date: taskResult.dueDate || new Date().toISOString(),
-                                        task_description: taskResult.description || document.title,
-                                        subtasks: taskResult.subtasks || [],
-                                        documents: [document],
-                                        approved_by_user: false
-                                    };
-                                    
-                                    // Add the new task to the updated tasks list
-                                    updatedTasks.push(newTask);
-                                } else if (taskResult.type === 'update' && taskResult.taskId) {
-                                    // Update an existing task
-                                    const taskIndex = updatedTasks.findIndex(t => t.id === taskResult.taskId);
-                                    if (taskIndex >= 0) {
-                                        const task = updatedTasks[taskIndex];
-                                        updatedTasks[taskIndex] = {
-                                            ...task,
-                                            ...taskResult.updatedTask,
-                                            approved_by_user: false,
-                                            documents: [...task.documents, document]
-                                        };
-                                    }
-                                }
-                                // If taskResult.type === 'ignore', we do nothing
-                            }
+                            // Store document with its generated summary
+                            documentMap[document.id] = {
+                                ...document,
+                                summary
+                            };
+                            
+                            // Log the generated summary
+                            console.log(`Generated summary: ${summary}`);
                         }
+                        console.log(`=== END DOCUMENT DETAILS ===\n`);
                         
                         // Update progress
                         processedCount++;
@@ -193,29 +230,80 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                         });
                     }
                     
-                    // Step 6: Update the course with the updated document map and tasks
+                    // Update the course with documents and their summaries
                     updatedCourses[i] = {
                         ...course,
-                        documents: documentMap,
-                        tasks: updatedTasks
+                        documents: documentMap
                     };
                 }
                 
-                // Step 7: Update all courses at once in the global state
-                console.log(`Finished processing all documents. Updating ${updatedCourses.length} courses in global state.`);
+                // Step 6: Batch generate tasks with LLM using document summaries
+                setStatus({
+                    totalDocuments,
+                    processedDocuments: processedCount,
+                    message: 'Generating tasks based on document summaries...'
+                });
+                
+                let courseTasksMap;
+                
+                if (DEBUG_MODE) {
+                    // Use sample JSON in debug mode
+                    console.log("DEBUG MODE: Using sample JSON response");
+                    courseTasksMap = processJsonTaskResponse(SAMPLE_JSON_RESPONSE, updatedCourses);
+                } else {
+                    // Call the real API
+                    courseTasksMap = await batchGenerateTasks(updatedCourses);
+                }
+                
+                // Step 7: Update the courses with the generated tasks
+                const finalCourses = updatedCourses.map(course => ({
+                    ...course,
+                    tasks: courseTasksMap[course.id] || []
+                }));
+                
+                // Log the tasks for debugging
+                console.log("=== TASK GENERATION RESULTS ===");
+                console.log(`Generated tasks for ${Object.keys(courseTasksMap).length} courses`);
+                Object.entries(courseTasksMap).forEach(([courseId, tasks]) => {
+                    const course = updatedCourses.find(c => c.id === courseId);
+                    console.log(`\nCourse: ${course?.name || 'Unknown'} (${courseId})`);
+                    console.log(`Number of tasks: ${tasks.length}`);
+                    
+                    tasks.forEach((task, index) => {
+                        console.log(`\n  Task ${index + 1}: ${task.task_description}`);
+                        console.log(`    Type: ${task.type}`);
+                        console.log(`    Due date: ${task.due_date}`);
+                        console.log(`    Subtasks: ${task.subtasks.length}`);
+                        console.log(`    Documents: ${task.documents.length}`);
+                        
+                        // Log subtasks
+                        task.subtasks.forEach((subtask, sIndex) => {
+                            console.log(`      Subtask ${sIndex + 1}: ${subtask.description.substring(0, 50)}${subtask.description.length > 50 ? '...' : ''}`);
+                        });
+                        
+                        // Log document IDs
+                        if (task.documents.length > 0) {
+                            console.log(`      Document IDs: ${task.documents.map(doc => doc.id).join(', ')}`);
+                        }
+                    });
+                });
+                console.log("=== END TASK GENERATION RESULTS ===");
+                
+                // Step 8: Update all courses at once in the global state
+                console.log(`Finished processing. Updating ${finalCourses.length} courses in global state.`);
                 setStatus({
                     totalDocuments,
                     processedDocuments: processedCount,
                     message: 'Finalizing task generation...'
                 });
                 
-                // First update courses in the global state
-                setCourses(updatedCourses);
+                // Update courses in the global state
+                setCourses(finalCourses);
                 
-                // Then update the last task generation date
+                // Update the last task generation date
                 updatePreferences({ lastTaskGenerationDate: new Date() });
                 
-                // Finally, navigate to the task review screen
+                // Navigate to the task review screen
                 setStatus({
                     totalDocuments,
                     processedDocuments: processedCount,
@@ -235,7 +323,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         };
         
         generateTasks();
-    }, [token, navigation, setCourses, updateTask, addTask, updatePreferences, preferences, courses]);
+    }, [token, navigation, setCourses, updatePreferences, preferences, courses]);
 
     if (loading) {
         return (

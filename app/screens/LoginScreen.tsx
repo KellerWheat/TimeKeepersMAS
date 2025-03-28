@@ -10,10 +10,12 @@ import {
     ScrollView,
     Platform,
     Linking,
-    Alert
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData } from '@/src/context/AppDataContext';
+import { verifyCanvasToken } from '@/src/api/canvasApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Canvas settings
@@ -42,7 +44,7 @@ const generateYears = () => {
 };
 
 const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { setToken, updateData } = useAppData();
+    const { setToken, updateData, resetAppData } = useAppData();
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [date, setDate] = useState(new Date());
     const [dateString, setDateString] = useState(new Date().toLocaleDateString());
@@ -51,6 +53,10 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const [tokenInputVisible, setTokenInputVisible] = useState(false);
     const [tokenInput, setTokenInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Saved token state
+    const [hasSavedToken, setHasSavedToken] = useState(false);
+    const [savedToken, setSavedToken] = useState('');
     
     // Date picker state
     const [selectedMonth, setSelectedMonth] = useState(date.getMonth());
@@ -68,14 +74,37 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         try {
             const token = await AsyncStorage.getItem(CANVAS_CONFIG.tokenStorageKey);
             if (token) {
-                // If we have a token, use it
-                setToken(token);
-                updateData({ current_date: date });
-                navigation.navigate('Courses');
+                setIsLoading(true);
+                try {
+                    // Verify the stored token is still valid
+                    const result = await verifyCanvasToken(token);
+                    
+                    if (result.valid) {
+                        // If we have a valid token, store it but don't navigate automatically
+                        setSavedToken(token);
+                        setHasSavedToken(true);
+                    } else {
+                        // Token is invalid, show instructions to get a new one
+                        console.log('Stored token is invalid, requesting new token');
+                        setTokenInputVisible(true);
+                    }
+                } catch (error) {
+                    console.error('Error verifying stored token:', error);
+                    // On verification error, let the user enter a token manually
+                    setTokenInputVisible(true);
+                } finally {
+                    setIsLoading(false);
+                }
             }
         } catch (error) {
             console.error('Error checking token:', error);
         }
+    };
+
+    const continueWithSavedToken = () => {
+        setToken(savedToken);
+        updateData({ current_date: date });
+        navigation.navigate('Courses');
     };
 
     const saveAndUseToken = async (token: string) => {
@@ -90,13 +119,28 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         }
     };
 
-    const handleTokenSubmit = () => {
+    const handleTokenSubmit = async () => {
         if (!tokenInput.trim()) {
             Alert.alert('Error', 'Please enter a valid Canvas token');
             return;
         }
         
-        saveAndUseToken(tokenInput.trim());
+        setIsLoading(true);
+        try {
+            // Verify the token using our proxy-enabled function
+            const result = await verifyCanvasToken(tokenInput.trim());
+            
+            if (result.valid) {
+                saveAndUseToken(tokenInput.trim());
+            } else {
+                Alert.alert('Error', 'The Canvas token appears to be invalid. Please check and try again.');
+            }
+        } catch (error) {
+            console.error('Error verifying token:', error);
+            Alert.alert('Error', 'Could not verify token. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const openCanvasSettings = () => {
@@ -104,16 +148,6 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             console.error('Error opening Canvas settings:', err);
             Alert.alert('Error', 'Could not open Canvas settings. Please navigate to Canvas settings manually.');
         });
-    };
-
-    const handleLogin = () => {
-        // Use the test token for development
-        setToken('2096~X8T4uXZ8VxQDUekYW4FUuyVFeFzPLWE3BxzkRxDuDmGTKutyDHKeJ4wRtB7NC44k');
-        
-        // Update the current_date in the app data context for testing
-        updateData({ current_date: date });
-        
-        navigation.navigate('Courses');
     };
 
     const showDatePickerModal = () => {
@@ -152,6 +186,40 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         setDate(newDate);
         setDateString(newDate.toLocaleDateString());
         setShowDatePicker(false);
+    };
+
+    const handleResetData = () => {
+        Alert.alert(
+            "Reset All Data",
+            "This will reset all app data including your Canvas token and course information. Are you sure?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Reset",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsLoading(true);
+                        try {
+                            await resetAppData();
+                            // Reset local state
+                            setHasSavedToken(false);
+                            setSavedToken('');
+                            setDate(new Date());
+                            setDateString(new Date().toLocaleDateString());
+                            Alert.alert("Success", "All app data has been reset successfully.");
+                        } catch (error) {
+                            console.error('Error resetting data:', error);
+                            Alert.alert("Error", "Failed to reset app data. Please try again.");
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -327,40 +395,67 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                             placeholderTextColor="#999"
                             autoCapitalize="none"
                             autoCorrect={false}
+                            editable={!isLoading}
                         />
                         
                         <View style={styles.modalButtonContainer}>
                             <TouchableOpacity 
                                 style={[styles.modalButton, styles.cancelButton]} 
                                 onPress={() => setTokenInputVisible(false)}
+                                disabled={isLoading}
                             >
                                 <Text style={styles.modalButtonText}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.confirmButton]} 
-                                onPress={handleTokenSubmit}
-                            >
-                                <Text style={styles.modalButtonText}>Submit</Text>
-                            </TouchableOpacity>
+                            
+                            {isLoading ? (
+                                <View style={[styles.modalButton, styles.loadingButton]}>
+                                    <ActivityIndicator color="#fff" size="small" />
+                                </View>
+                            ) : (
+                                <TouchableOpacity 
+                                    style={[styles.modalButton, styles.confirmButton]} 
+                                    onPress={handleTokenSubmit}
+                                >
+                                    <Text style={styles.modalButtonText}>Submit</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 </View>
             </Modal>
             
+            {/* Continue with Saved Token button */}
+            {hasSavedToken && (
+                <TouchableOpacity 
+                    style={[sharedStyles.button, styles.continueButton]} 
+                    onPress={continueWithSavedToken}
+                    disabled={isLoading}
+                >
+                    <Text style={sharedStyles.buttonText}>
+                        Continue with Saved Token
+                    </Text>
+                </TouchableOpacity>
+            )}
+            
             <TouchableOpacity 
                 style={[sharedStyles.button, styles.tokenButton]} 
                 onPress={() => setTokenInputVisible(true)}
+                disabled={isLoading}
             >
                 <Text style={sharedStyles.buttonText}>
                     Login with Canvas Token
                 </Text>
             </TouchableOpacity>
-            
+
+            {/* Reset App Data Button */}
             <TouchableOpacity 
-                style={[sharedStyles.button, styles.loginButton]} 
-                onPress={handleLogin}
+                style={[sharedStyles.button, styles.resetButton]} 
+                onPress={handleResetData}
+                disabled={isLoading}
             >
-                <Text style={sharedStyles.buttonText}>Use Test Token (Development)</Text>
+                <Text style={sharedStyles.buttonText}>
+                    Reset All Data
+                </Text>
             </TouchableOpacity>
         </View>
     );
@@ -409,6 +504,10 @@ const styles = StyleSheet.create({
     tokenButton: {
         marginTop: 20,
         backgroundColor: '#3498db',
+    },
+    continueButton: {
+        marginTop: 20,
+        backgroundColor: '#27ae60',
     },
     // Token Input styles
     tokenInput: {
@@ -531,6 +630,19 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 16,
+    },
+    loadingButton: {
+        backgroundColor: '#7f8c8d',
+        marginLeft: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 5,
+        minWidth: 100,
+        alignItems: 'center',
+    },
+    resetButton: {
+        marginTop: 20,
+        backgroundColor: '#e74c3c',
     },
 });
 
