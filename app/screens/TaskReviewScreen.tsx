@@ -368,60 +368,22 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
             
             <View style={styles.infoContainer}>
                 <Text style={styles.infoText}>
-                    Approve the tasks you want to include in your schedule, then set your weekly availability.
+                    Approve the tasks you want to include in your schedule.
                 </Text>
-                <TouchableOpacity 
-                    style={styles.scheduleButton}
-                    onPress={handleEditSchedule}
-                >
-                    <Text style={sharedStyles.buttonText}>⏰ Set Weekly Schedule</Text>
-                </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.scrollContainer}>
-                {tasksByCourse.length === 0 ? (
-                    <Text style={styles.noTasksText}>
-                        No tasks available for review. Generate tasks from your courses first.
-                    </Text>
-                ) : (
-                    tasksByCourse.map(({ course, tasks }) => (
-                        <View key={course.id} style={styles.courseSection}>
-                            <Text style={styles.courseTitle}>{course.name}</Text>
-                            
-                            {tasks.map(task => (
-                                <TouchableOpacity
-                                    key={task.id}
-                                    style={[
-                                        styles.taskItem,
-                                        task.approved_by_user && styles.approvedTask
-                                    ]}
-                                    onPress={() => toggleApproval(course.id, task.id, !task.approved_by_user)}
-                                >
-                                    <View style={styles.taskHeader}>
-                                        <Text style={styles.taskTitle}>{task.task_description}</Text>
-                                        <Text style={task.approved_by_user ? styles.approvedIcon : styles.unapprovedIcon}>
-                                            {task.approved_by_user ? '✓' : '○'}
-                                        </Text>
-                                    </View>
-                                    
-                                    <Text style={styles.taskDescription}>
-                                        {task.task_description}
-                                    </Text>
-                                    
-                                    <Text style={styles.taskDueDate}>
-                                        Due: {new Date(task.due_date).toLocaleDateString()}
-                                    </Text>
-                                    
-                                    <Text style={styles.subtasksInfo}>
-                                        {task.subtasks.length} subtasks • 
-                                        Est. {task.subtasks.reduce((sum, st) => sum + st.expected_time, 0)} hours
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    ))
-                )}
-            </ScrollView>
+            {allTasks.length === 0 ? (
+                <Text style={styles.noTasksText}>
+                    No tasks available for review. Generate tasks from your courses first.
+                </Text>
+            ) : (
+                <FlatList
+                    data={allTasks}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => item.id}
+                    style={styles.scrollContainer}
+                />
+            )}
             
             <View style={styles.buttonContainer}>
                 <TouchableOpacity
@@ -438,6 +400,13 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
                     </Text>
                 </TouchableOpacity>
             </View>
+            
+            <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setShowCourseModal(true)}
+            >
+                <Text style={styles.addButtonText}>+</Text>
+            </TouchableOpacity>
             
             <CourseSelectionModal
                 visible={showCourseModal}
@@ -470,67 +439,28 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#555',
         textAlign: 'center',
-        marginBottom: 16,
-    },
-    courseSection: {
-        marginBottom: 20,
-    },
-    courseTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#2c3e50',
         marginBottom: 8,
     },
-    taskItem: {
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    taskHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    addButton: {
+        position: 'absolute',
+        right: 20,
+        bottom: 80,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#2c3e50',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 8,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
     },
-    taskTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        flex: 1,
-    },
-    approvedIcon: {
-        fontSize: 22,
-        color: '#27ae60',
+    addButtonText: {
+        fontSize: 24,
+        color: 'white',
         fontWeight: 'bold',
-    },
-    unapprovedIcon: {
-        fontSize: 22,
-        color: '#7f8c8d',
-    },
-    taskDescription: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 8,
-    },
-    taskDueDate: {
-        fontSize: 14,
-        color: '#e74c3c',
-        fontWeight: '500',
-        marginBottom: 4,
-    },
-    subtasksInfo: {
-        fontSize: 12,
-        color: '#7f8c8d',
-    },
-    approvedTask: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#27ae60',
     },
     buttonContainer: {
         marginTop: 8,
