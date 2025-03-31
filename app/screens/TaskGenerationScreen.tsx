@@ -4,7 +4,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { fetchEnrolledCourses, fetchCourseDocuments } from '@/src/api/canvasApi';
 import { generateDocumentSummary, batchGenerateTasks, processJsonTaskResponse } from '@/src/api/llmApi';
 import { sharedStyles } from '@/src/sharedStyles';
-import { useAppData, Task, Document, Course } from '@/src/context/AppDataContext';
+import { useAppData, Document, Course } from '@/src/context/AppDataContext';
 import { v4 as uuidv4 } from 'uuid';
 
 // Debug mode for testing with sample JSON
@@ -95,47 +95,43 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     const [hasHandledNavigation, setHasHandledNavigation] = useState<boolean>(false);
 
     useEffect(() => {
-        // If we've already handled navigation, don't run the task generation logic again
-        if (hasHandledNavigation) {
-            return;
-        }
+        (async () => {
+            if (hasHandledNavigation) return;
 
-        if (!token) {
-            console.error("Token is null. Aborting Task Generation.");
-            navigation.navigate('Login');
-            setHasHandledNavigation(true);
-            return;
-        }
+            if (!token) {
+                console.error("Token is null. Aborting Task Generation.");
+                navigation.navigate('Login');
+                setHasHandledNavigation(true);
+                return;
+            }
 
-        const navigateToTaskReview = () => {
-            console.log("All tasks generated successfully. Navigating to TaskReview screen.");
-            setLoading(false);
-            navigation.navigate('TaskReview');
-            setHasHandledNavigation(true);
-        };
+            const navigateToTaskReview = () => {
+                console.log("All tasks generated successfully. Navigating to TaskReview screen.");
+                setLoading(false);
+                navigation.navigate('TaskReview');
+                setHasHandledNavigation(true);
+                return;
+            };
 
-        const generateTasks = async () => {
             try {
-                // Check if we've already generated tasks recently
-                if (preferences.lastTaskGenerationDate) {
-                    const lastGenTime = new Date(preferences.lastTaskGenerationDate).getTime();
-                    const currentTime = new Date().getTime();
-                    const hoursSinceLastGen = (currentTime - lastGenTime) / (1000 * 60 * 60);
-                    
-                    // If less than minimum hours have passed, skip generation
-                    if (hoursSinceLastGen < MIN_HOURS_BETWEEN_GENERATIONS) {
-                        console.log(`Skipping task generation: Last generated ${hoursSinceLastGen.toFixed(1)} hours ago`);
-                        navigateToTaskReview();
-                        return;
-                    }
-                }
+                // Check if we've generated tasks recently
+                // if (preferences.lastTaskGenerationDate) {
+                //     const lastGenTime = new Date(preferences.lastTaskGenerationDate).getTime();
+                //     const currentTime = new Date().getTime();
+                //     const hoursSinceLastGen = (currentTime - lastGenTime) / (1000 * 60 * 60);
+                //     if (hoursSinceLastGen < MIN_HOURS_BETWEEN_GENERATIONS) {
+                //         console.log(`Skipping task generation: Last generated ${hoursSinceLastGen.toFixed(1)} hours ago`);
+                //         navigateToTaskReview();
+                //         return;
+                //     }
+                // }
 
-                // Check if courses already have tasks, skip generation if they do
-                if (courses.some(course => course.tasks && course.tasks.length > 0)) {
-                    console.log("Tasks already exist. Skipping generation.");
-                    navigateToTaskReview();
-                    return;
-                }
+                // Skip generation if courses already have tasks
+                // if (courses.some(course => course.tasks && course.tasks.length > 0)) {
+                //     console.log("Tasks already exist. Skipping generation.");
+                //     navigateToTaskReview();
+                //     return;
+                // }
 
                 // Step 1: Fetch courses if they don't exist
                 setStatus({ ...status, message: 'Fetching courses...' });
@@ -162,91 +158,98 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 // Calculate total documents for progress tracking
                 let totalDocuments = 0;
                 let processedCount = 0;
-                
+
                 // Create a copy of courses to work with
                 const updatedCourses = [...currentCourses];
-                
+
                 // Step 3: Process each course
                 for (let i = 0; i < updatedCourses.length; i++) {
                     const course = updatedCourses[i];
-                    console.log(`Processing course ${i+1}/${updatedCourses.length}: ${course.name}`);
-                    setStatus({
-                        totalDocuments,
-                        processedDocuments: processedCount,
-                        message: `Processing course: ${course.name}`
-                    });
-                    
-                    // Step 4: Fetch documents for the course
-                    const documents = await fetchCourseDocuments(token, course.id);
-                    totalDocuments += documents.length;
-                    setStatus({
-                        totalDocuments,
-                        processedDocuments: processedCount,
-                        message: `Processing ${documents.length} documents for ${course.name}`
-                    });
-                    
-                    // Create a map of document IDs to documents
-                    const documentMap: { [id: string]: Document } = {};
-                    
-                    // Step 5: Process each document to generate summaries
-                    for (const document of documents) {
-                        // Skip documents with due dates in the past
-                        const currentDate = new Date();
-                        if (document.due_date && document.due_date < currentDate) {
-                            console.log(`Skipping ${document.type} "${document.title}" because due date is in the past (${document.due_date.toLocaleDateString()})`);
-                            continue;
-                        }
-                        
-                        // Update status with current document
+                    try {
+                        console.log(`Processing course ${i+1}/${updatedCourses.length}: ${course.name}`);
                         setStatus({
                             totalDocuments,
                             processedDocuments: processedCount,
-                            message: `Generating summary for: ${document.title.substring(0, 30)}${document.title.length > 30 ? '...' : ''}`
+                            message: `Processing course: ${course.name}`
                         });
-                        
-                        // Print document details for debugging
-                        console.log(`\n=== DOCUMENT DETAILS: "${document.title}" ===`);
-                        console.log(`Type: ${document.type}`);
-                        console.log(`Due Date: ${document.due_date.toISOString()}`);
-                        console.log(`Content (first 300 chars): ${document.content.substring(0, 300).replace(/\n/g, ' ')}${document.content.length > 300 ? '...' : ''}`);
-                        
-                        // Check if document already exists in our data with a summary
-                        const existingDocument = course.documents[document.id];
-                        if (existingDocument && existingDocument.summary) {
+
+                        // Step 4: Fetch documents for the course
+                        const documents = await fetchCourseDocuments(token, course.id);
+                        totalDocuments += documents.length;
+                        setStatus({
+                            totalDocuments,
+                            processedDocuments: processedCount,
+                            message: `Processing ${documents.length} documents for ${course.name}`
+                        });
+
+                        // Create a map of document IDs to documents
+                        const documentMap: { [id: string]: Document } = {};
+
+                        // Step 5: Process each document to generate summaries
+                        for (const document of documents) {
+                            // Skip documents with due dates in the past
+                            const currentDate = new Date();
+                            if (document.due_date && document.due_date < currentDate) {
+                                console.log(`Skipping ${document.type} "${document.title}" because due date is in the past (${document.due_date.toLocaleDateString()})`);
+                                continue;
+                            }
+
+                            // Update status with current document
+                        setStatus({
+                            totalDocuments,
+                            processedDocuments: processedCount,
+                                message: `Generating summary for: ${document.title.substring(0, 30)}${document.title.length > 30 ? '...' : ''}`
+                            });
+
+                            // Print document details for debugging
+                            console.log(`\n=== DOCUMENT DETAILS: "${document.title}" ===`);
+                            console.log(`Type: ${document.type}`);
+                            console.log(`Due Date: ${document.due_date.toISOString()}`);
+                            console.log(`Content (first 300 chars): ${document.content.substring(0, 300).replace(/\n/g, ' ')}${document.content.length > 300 ? '...' : ''}`);
+
+                            // Check if document already exists in our data with a summary
+                            const existingDocument = course.documents[document.id];
+                            if (existingDocument && existingDocument.summary) {
                             // Use existing document with its summary
-                            documentMap[document.id] = existingDocument;
-                            console.log(`Using existing summary: ${existingDocument.summary}`);
-                        } else {
+                                documentMap[document.id] = existingDocument;
+                                console.log(`Using existing summary: ${existingDocument.summary}`);
+                            } else {
                             // Generate a summary for the document
-                            const summary = await generateDocumentSummary(document);
-                            
+                                const summary = await generateDocumentSummary(document);
+
                             // Store document with its generated summary
-                            documentMap[document.id] = {
-                                ...document,
-                                summary
-                            };
-                            
+                                documentMap[document.id] = {
+                                    ...document,
+                                    summary
+                                };
+
                             // Log the generated summary
-                            console.log(`Generated summary: ${summary}`);
+                                console.log(`Generated summary: ${summary}`);
+                            }
+                            console.log(`=== END DOCUMENT DETAILS ===\n`);
+
+                            // Update progress
+                            processedCount++;
+                            setStatus({
+                                totalDocuments,
+                                processedDocuments: processedCount,
+                                message: `Processed ${processedCount}/${totalDocuments} documents`
+                            });
                         }
-                        console.log(`=== END DOCUMENT DETAILS ===\n`);
-                        
-                        // Update progress
-                        processedCount++;
-                        setStatus({
-                            totalDocuments,
-                            processedDocuments: processedCount,
-                            message: `Processed ${processedCount}/${totalDocuments} documents`
-                        });
+
+                        // Update the course with documents and their summaries
+                        updatedCourses[i] = {
+                            ...course,
+                            documents: documentMap
+                        };
+
+                    } catch (error) {
+                        console.error(`Error processing course "${course.name}"`, error);
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
                     }
                     
-                    // Update the course with documents and their summaries
-                    updatedCourses[i] = {
-                        ...course,
-                        documents: documentMap
-                    };
                 }
-                
+
                 // Step 6: Batch generate tasks with LLM using document summaries
                 setStatus({
                     totalDocuments,
@@ -255,22 +258,22 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 });
                 
                 let courseTasksMap;
-                
+
                 if (DEBUG_MODE) {
-                    // Use sample JSON in debug mode
+                // Use sample JSON in debug mode
                     console.log("DEBUG MODE: Using sample JSON response");
                     courseTasksMap = processJsonTaskResponse(SAMPLE_JSON_RESPONSE, updatedCourses);
                 } else {
-                    // Call the real API
+                // Call the real API
                     courseTasksMap = await batchGenerateTasks(updatedCourses);
                 }
-                
+
                 // Step 7: Update the courses with the generated tasks
                 const finalCourses = updatedCourses.map(course => ({
                     ...course,
                     tasks: courseTasksMap[course.id] || []
                 }));
-                
+
                 // Log the tasks for debugging
                 console.log("=== TASK GENERATION RESULTS ===");
                 console.log(`Generated tasks for ${Object.keys(courseTasksMap).length} courses`);
@@ -278,19 +281,19 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     const course = updatedCourses.find(c => c.id === courseId);
                     console.log(`\nCourse: ${course?.name || 'Unknown'} (${courseId})`);
                     console.log(`Number of tasks: ${tasks.length}`);
-                    
+
                     tasks.forEach((task, index) => {
                         console.log(`\n  Task ${index + 1}: ${task.task_description}`);
                         console.log(`    Type: ${task.type}`);
                         console.log(`    Due date: ${task.due_date}`);
                         console.log(`    Subtasks: ${task.subtasks.length}`);
                         console.log(`    Documents: ${task.documents.length}`);
-                        
+
                         // Log subtasks
                         task.subtasks.forEach((subtask, sIndex) => {
                             console.log(`      Subtask ${sIndex + 1}: ${subtask.description.substring(0, 50)}${subtask.description.length > 50 ? '...' : ''}`);
                         });
-                        
+
                         // Log document IDs
                         if (task.documents.length > 0) {
                             console.log(`      Document IDs: ${task.documents.map(doc => doc.id).join(', ')}`);
@@ -298,7 +301,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     });
                 });
                 console.log("=== END TASK GENERATION RESULTS ===");
-                
+
                 // Step 8: Update all courses at once in the global state
                 console.log(`Finished processing. Updating ${finalCourses.length} courses in global state.`);
                 setStatus({
@@ -309,7 +312,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 
                 // Update courses in the global state
                 setCourses(finalCourses);
-                
+
                 // Update the last task generation date
                 updatePreferences({ lastTaskGenerationDate: new Date() });
                 
@@ -331,19 +334,23 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 setLoading(false);
                 setHasHandledNavigation(true);
             }
-        };
-        
-        generateTasks();
-    }, [token, navigation, setCourses, updatePreferences, preferences, courses, hasHandledNavigation, status]);
+        })();
+    }, [
+        token,
+        navigation,
+        setCourses,
+        updatePreferences,
+        preferences.lastTaskGenerationDate,
+        courses,
+        hasHandledNavigation
+    ]);
 
     if (loading) {
         return (
             <View style={sharedStyles.container}>
                 <Text style={sharedStyles.screenTitle}>Generating Tasks</Text>
                 <ActivityIndicator size="large" color="#2980b9" style={{ marginVertical: 20 }} />
-                <Text style={sharedStyles.text}>
-                    {status.message}
-                </Text>
+                <Text style={sharedStyles.text}>{status.message}</Text>
                 {status.totalDocuments > 0 && (
                     <Text style={[sharedStyles.text, { marginTop: 10 }]}>
                         Progress: {status.processedDocuments}/{status.totalDocuments} documents

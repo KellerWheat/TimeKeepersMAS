@@ -322,7 +322,7 @@ Please analyze this document and determine how it should be handled. Return ONLY
 }
 
 IMPORTANT: When creating subtasks:
-- Create at least 4-6 specific subtasks for each task
+- Create at least 1-4 specific subtasks for each task depending on your interpreted difficulty / intensity of the assignment/test
 - Extract specific requirements from the document content
 - Include specific deliverables mentioned in the assignment description
 - Be very specific about what each subtask requires (e.g., instead of "Complete assignment", use "Write a 2-page analysis of the case study")

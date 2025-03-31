@@ -96,7 +96,7 @@ const ScheduledSubtask = React.memo(({
     
     // Calculate height based on duration (1 hour = 60px height)
     const durationMinutes = scheduledTime.end_time - scheduledTime.start_time;
-    const heightPx = Math.max(durationMinutes / 60 * 60, 40); // Minimum height of 40px
+    const heightPx = Math.max(durationMinutes / 60 * 60, 70); // Minimum height of 40px
     
     // Calculate top position based on start time from day start
     // Start time is in minutes from midnight, convert to pixels
@@ -327,7 +327,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             style={sharedStyles.button} 
                             onPress={handleSave}
                         >
-                            <Text style={sharedStyles.buttonText}>Save Progress</Text>
+                            <Text style={sharedStyles.buttonText}>Save Progress and Close</Text>
                         </TouchableOpacity>
                     )}
                     

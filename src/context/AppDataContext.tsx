@@ -113,13 +113,13 @@ const STORAGE_KEYS = {
 
 // Default weekly schedule with some reasonable availability
 const defaultWeeklySchedule: WeeklySchedule = {
-    0: { available_blocks: [] }, // Sunday
+    0: { available_blocks: [{ id: '0-1', start_time: 820, end_time: 1320 }] }, // Sunday
     1: { available_blocks: [{ id: '1-1', start_time: 540, end_time: 720 }, { id: '1-2', start_time: 840, end_time: 1020 }] }, // Monday
     2: { available_blocks: [{ id: '2-1', start_time: 540, end_time: 720 }, { id: '2-2', start_time: 840, end_time: 1020 }] }, // Tuesday
     3: { available_blocks: [{ id: '3-1', start_time: 540, end_time: 720 }, { id: '3-2', start_time: 840, end_time: 1020 }] }, // Wednesday
     4: { available_blocks: [{ id: '4-1', start_time: 540, end_time: 720 }, { id: '4-2', start_time: 840, end_time: 1020 }] }, // Thursday
     5: { available_blocks: [{ id: '5-1', start_time: 540, end_time: 720 }, { id: '5-2', start_time: 840, end_time: 1020 }] }, // Friday
-    6: { available_blocks: [] }, // Saturday
+    6: { available_blocks: [{ id: '6-1', start_time: 820, end_time: 1320 }] }, // Saturday
 };
 
 const defaultData: AppData = {
@@ -594,6 +594,9 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             // Calculate how much time is still needed (in minutes)
             const timeNeededHours = subtask.expected_time * (1 - subtask.current_percentage_completed / 100);
             const timeNeededMinutes = Math.ceil(timeNeededHours * 60);
+            const adjustedDueDate = new Date(dueDate);
+            adjustedDueDate.setDate(adjustedDueDate.getDate() - 1);
+            const dueDateOnly = adjustedDueDate.toISOString().split('T')[0];
             
             // Skip if no time needed
             if (timeNeededMinutes <= 0) {
@@ -604,10 +607,8 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             // First look at days closer to the due date
             for (let i = availableSlots.length - 1; i >= 0; i--) {
                 const daySlot = availableSlots[i];
-                const slotDate = new Date(daySlot.day);
                 
-                // Skip days that are after the due date
-                if (slotDate > dueDate) {
+                if (daySlot.day > dueDateOnly) {
                     continue;
                 }
                 
@@ -658,7 +659,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             if (!newScheduledTasks.some(st => st.subtask_id === subtask.id && !preservedSchedules.includes(st))) {
                 for (let i = 0; i < availableSlots.length; i++) {
                     const daySlot = availableSlots[i];
-                    
+                    // Skip days that are after the due date
+                    if (daySlot.day > dueDateOnly) {
+                        continue;
+                    }
                     // Try to find a slot in this day
                     for (let j = 0; j < daySlot.slots.length; j++) {
                         const slot = daySlot.slots[j];
