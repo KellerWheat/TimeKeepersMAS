@@ -99,8 +99,8 @@ const ScheduledSubtask = React.memo(({
     // Calculate height based on duration and completion percentage
     const durationMinutes = scheduledTime.end_time - scheduledTime.start_time;
     const remainingPercentage = 100 - subtask.current_percentage_completed;
-    const scaledDurationMinutes = Math.ceil(durationMinutes * (remainingPercentage / 100));
-    // Ensure minimum height of 1 hour (60px)
+    const scaledDurationMinutes = Math.max(Math.ceil(durationMinutes * (remainingPercentage / 100)), 180);
+    // Ensure minimum height of 1 hour (60px) regardless of completion percentage
     const heightPx = Math.max(scaledDurationMinutes / 60 * 60, 60);
     
     // Calculate top position based on start time from day start

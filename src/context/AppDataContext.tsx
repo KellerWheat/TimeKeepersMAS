@@ -796,7 +796,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
             // Calculate how much time is still needed (in minutes)
             const timeNeededHours = subtask.expected_time * (1 - subtask.current_percentage_completed / 100);
-            const timeNeededMinutes = Math.ceil(timeNeededHours * 60);
+            const timeNeededMinutes = Math.max(Math.ceil(timeNeededHours * 60), 60); // Ensure minimum of 60 minutes
             const adjustedDueDate = new Date(dueDate);
             adjustedDueDate.setDate(adjustedDueDate.getDate() - 1);
             const dueDateOnly = adjustedDueDate.toISOString().split('T')[0];

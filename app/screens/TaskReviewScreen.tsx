@@ -235,7 +235,6 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
     const [editingFields, setEditingFields] = useState<{ [key: string]: EditingFields }>({});
     const [showCourseModal, setShowCourseModal] = useState(false);
     const [isScheduling, setIsScheduling] = useState(false);
-    const [hasAutoNavigated, setHasAutoNavigated] = useState(false);
 
     // Calculate the date threshold based on user preferences
     const currentDate = new Date();
@@ -261,19 +260,6 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
                taskDate <= maxViewDate;
     })
     .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-
-    // Auto-skip to calendar if all tasks are already approved
-    useEffect(() => {
-        // Only auto-navigate if we haven't done so already and all tasks are approved
-        if (!hasAutoNavigated && areAllTasksApproved() && allTasks.length > 0) {
-            // Set the flag to prevent repeated navigation
-            setHasAutoNavigated(true);
-            
-            // If all tasks are approved, run auto-scheduling and navigate to calendar
-            autoScheduleTasks();
-            navigation.navigate('Calendar');
-        }
-    }, [areAllTasksApproved, allTasks.length, autoScheduleTasks, navigation, hasAutoNavigated]);
 
     // Helper functions for TaskItem
     const toggleExpansion = (id: string) => {
