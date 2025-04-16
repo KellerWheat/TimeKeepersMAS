@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, TimeBlock, WeeklySchedule } from '@/src/context/AppDataContext';
@@ -26,54 +26,109 @@ type ScheduleScreenProps = {
 
 const ScheduleScreen = ({ navigation }: ScheduleScreenProps) => {
     const { data, updateWeeklySchedule, autoScheduleTasks } = useAppData();
-    const [schedule, setSchedule] = useState<WeeklySchedule>(data.weeklySchedule);
+    const [selectedBlocks, setSelectedBlocks] = useState<{ [day: number]: Set<number> }>({});
 
-    // Check if a time block is enabled for a day
-    const isBlockEnabled = (dayOfWeek: number, start: number, end: number): boolean => {
-        const daySchedule = schedule[dayOfWeek];
-        if (!daySchedule || !daySchedule.available_blocks) return false;
+    // Initialize selected blocks from existing schedule
+    useEffect(() => {
+        const initialSelectedBlocks: { [day: number]: Set<number> } = {};
         
-        return daySchedule.available_blocks.some(
-            block => block.start_time === start && block.end_time === end
-        );
-    };
+        // For each day, check which blocks are part of any time block
+        for (let day = 0; day < 7; day++) {
+            const daySchedule = data.weeklySchedule[day];
+            const selected = new Set<number>();
+            
+            if (daySchedule && daySchedule.available_blocks) {
+                // For each available block, mark all UI blocks that overlap with it
+                daySchedule.available_blocks.forEach(block => {
+                    AVAILABLE_BLOCKS.forEach((uiBlock, index) => {
+                        if (uiBlock.start >= block.start_time && uiBlock.end <= block.end_time) {
+                            selected.add(index);
+                        }
+                    });
+                });
+            }
+            
+            initialSelectedBlocks[day] = selected;
+        }
+        
+        setSelectedBlocks(initialSelectedBlocks);
+    }, [data.weeklySchedule]);
 
     // Toggle a time block for a specific day
-    const toggleTimeBlock = (dayOfWeek: number, start: number, end: number) => {
-        const newSchedule = { ...schedule };
-        
-        // Ensure the day exists in the schedule
-        if (!newSchedule[dayOfWeek]) {
-            newSchedule[dayOfWeek] = { available_blocks: [] };
+    const toggleTimeBlock = (dayOfWeek: number, blockIndex: number) => {
+        setSelectedBlocks(prev => {
+            const newSelected = { ...prev };
+            if (!newSelected[dayOfWeek]) {
+                newSelected[dayOfWeek] = new Set();
+            }
+            
+            if (newSelected[dayOfWeek].has(blockIndex)) {
+                newSelected[dayOfWeek].delete(blockIndex);
+            } else {
+                newSelected[dayOfWeek].add(blockIndex);
+            }
+            
+            return newSelected;
+        });
+    };
+
+    // Consolidate adjacent blocks into continuous time ranges
+    const consolidateBlocks = (dayOfWeek: number): TimeBlock[] => {
+        const selected = selectedBlocks[dayOfWeek];
+        if (!selected || selected.size === 0) return [];
+
+        // Get all selected block times
+        const blockTimes = Array.from(selected)
+            .map(index => AVAILABLE_BLOCKS[index])
+            .sort((a, b) => a.start - b.start);
+
+        // Consolidate adjacent blocks
+        const consolidated: TimeBlock[] = [];
+        let currentBlock = { ...blockTimes[0] };
+
+        for (let i = 1; i < blockTimes.length; i++) {
+            const nextBlock = blockTimes[i];
+            
+            // If blocks are adjacent (end of current block equals start of next block)
+            if (currentBlock.end === nextBlock.start) {
+                currentBlock.end = nextBlock.end;
+            } else {
+                // Add the current block and start a new one
+                consolidated.push({
+                    id: uuidv4(),
+                    start_time: currentBlock.start,
+                    end_time: currentBlock.end
+                });
+                currentBlock = { ...nextBlock };
+            }
         }
-        
-        const dayBlocks = newSchedule[dayOfWeek].available_blocks;
-        
-        // Check if this block already exists
-        const existingBlockIndex = dayBlocks.findIndex(
-            block => block.start_time === start && block.end_time === end
-        );
-        
-        if (existingBlockIndex >= 0) {
-            // Remove the block if it exists
-            dayBlocks.splice(existingBlockIndex, 1);
-        } else {
-            // Add the block if it doesn't exist
-            dayBlocks.push({
-                id: uuidv4(),
-                start_time: start,
-                end_time: end
-            });
-        }
-        
-        setSchedule(newSchedule);
+
+        // Add the last block
+        consolidated.push({
+            id: uuidv4(),
+            start_time: currentBlock.start,
+            end_time: currentBlock.end
+        });
+
+        return consolidated;
     };
 
     // Save the schedule and navigate back
     const saveSchedule = () => {
-        updateWeeklySchedule(schedule);
-        // Re-run auto-scheduling with new availability
-        autoScheduleTasks();
+        const newSchedule: WeeklySchedule = {};
+        
+        // For each day, consolidate blocks and update schedule
+        for (let day = 0; day < 7; day++) {
+            const consolidatedBlocks = consolidateBlocks(day);
+            if (consolidatedBlocks.length > 0) {
+                newSchedule[day] = {
+                    available_blocks: consolidatedBlocks
+                };
+            }
+        }
+        
+        updateWeeklySchedule(newSchedule);
+        autoScheduleTasks(true); // Force reschedule all tasks
         navigation.goBack();
     };
 
@@ -88,9 +143,9 @@ const ScheduleScreen = ({ navigation }: ScheduleScreenProps) => {
                             key={index}
                             style={[
                                 styles.timeBlock,
-                                isBlockEnabled(dayOfWeek, block.start, block.end) && styles.timeBlockEnabled
+                                selectedBlocks[dayOfWeek]?.has(index) && styles.timeBlockEnabled
                             ]}
-                            onPress={() => toggleTimeBlock(dayOfWeek, block.start, block.end)}
+                            onPress={() => toggleTimeBlock(dayOfWeek, index)}
                         >
                             <Text style={styles.timeBlockText}>{block.label}</Text>
                         </TouchableOpacity>

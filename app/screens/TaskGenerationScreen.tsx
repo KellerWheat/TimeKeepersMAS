@@ -17,19 +17,19 @@ const SAMPLE_JSON_RESPONSE = `{
       "courseId": "451354",
       "tasks": [
         {
-          "id": "task-1",
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "type": "assignment",
           "due_date": "2025-01-15T14:30:00.000Z",
           "task_description": "Discussion Post 1",
           "subtasks": [
             {
-              "id": "subtask-1",
+              "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
               "description": "Write two discussion questions based on the readings, with enough detail for the audience to understand and follow the questions. The questions should be rooted in evidence from the readings.",
               "expected_time": 2,
               "current_percentage_completed": 0
             },
             {
-              "id": "subtask-2",
+              "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
               "description": "Submit the discussion questions before class on Wednesday, January 15th.",
               "expected_time": 1,
               "current_percentage_completed": 0
@@ -39,25 +39,25 @@ const SAMPLE_JSON_RESPONSE = `{
           "approved_by_user": false
         },
         {
-          "id": "task-2",
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d480",
           "type": "assignment",
           "due_date": "2025-01-22T14:30:00.000Z",
           "task_description": "Discussion Post 2",
           "subtasks": [
             {
-              "id": "subtask-1",
+              "id": "6ba7b812-9dad-11d1-80b4-00c04fd430c8",
               "description": "Write a discussion question for the reading \\"Cruel Pies\\" that is rooted in evidence from the text.",
               "expected_time": 1,
               "current_percentage_completed": 0
             },
             {
-              "id": "subtask-2",
+              "id": "6ba7b813-9dad-11d1-80b4-00c04fd430c8",
               "description": "Briefly explain ideas for visually representing the data in Du Bois' article and the USDA Census data.",
               "expected_time": 1,
               "current_percentage_completed": 0
             },
             {
-              "id": "subtask-3",
+              "id": "6ba7b814-9dad-11d1-80b4-00c04fd430c8",
               "description": "Submit the assignment before class on Wednesday, January 22nd.",
               "expected_time": 1,
               "current_percentage_completed": 0
@@ -85,6 +85,7 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
     const token = data.token;
     const courses = data.courses;
     const preferences = data.preferences;
+    const metrics = data.metrics;
     const [loading, setLoading] = useState<boolean>(true);
     const [status, setStatus] = useState<DocumentProcessingStatus>({ 
         totalDocuments: 0, 
@@ -168,7 +169,8 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                         });
 
                         // Step 4: Fetch documents for the course
-                        const documents = await fetchCourseDocuments(token, course.id);
+                        const documents = await fetchCourseDocuments(token, course.id, metrics.generationType === 'A');
+                        
                         totalDocuments += documents.length;
                         setStatus({
                             totalDocuments,
@@ -351,7 +353,8 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
         updatePreferences,
         preferences.lastTaskGenerationDate,
         courses,
-        hasHandledNavigation
+        hasHandledNavigation,
+        metrics.generationType
     ]);
 
     if (loading) {

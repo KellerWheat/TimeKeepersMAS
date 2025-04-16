@@ -157,7 +157,8 @@ export const fetchCourseCalendar = async (
 
 export const fetchCourseDocuments = async (
     token: string,
-    courseId: string
+    courseId: string,
+    includeAnnouncements: boolean = false
 ): Promise<Document[]> => {
     try {
         // Fetch assignments with pagination
@@ -189,43 +190,46 @@ export const fetchCourseDocuments = async (
         
         console.log(`Fetched a total of ${allAssignments.length} assignments for course ${courseId}`);
         
-        // Fetch announcements with pagination
-        let allAnnouncements: RawAnnouncement[] = [];
-        page = 1;
-        let hasMoreAnnouncements = true;
-        
-        // Continue fetching until we get an empty response
-        while (hasMoreAnnouncements) {
-            const announcementsUrl = `${CANVAS_BASE_URL}/announcements?context_codes[]=course_${courseId}&page=${page}&per_page=10&access_token=${token}`;
-            try {
-                const announcementsResponse = await fetch(announcementsUrl);
-                
-                const announcements: RawAnnouncement[] = await announcementsResponse.json();
-                
-                // If we get no announcements back, we've reached the end of pagination
-                if (announcements.length === 0) {
-                    hasMoreAnnouncements = false;
-                } else {
-                    allAnnouncements = [...allAnnouncements, ...announcements];
-                    console.log(`Fetched ${announcements.length} announcements for course ${courseId} (page ${page})`);
-                    page++;
+        // Convert assignments to our app's Document format
+        const assignmentDocs = allAssignments.map(convertAssignmentToDocument);
+        let allDocuments = [...assignmentDocs];
+
+        // Only fetch announcements if includeAnnouncements is true
+        if (includeAnnouncements) {
+            let allAnnouncements: RawAnnouncement[] = [];
+            page = 1;
+            let hasMoreAnnouncements = true;
+            
+            // Continue fetching until we get an empty response
+            while (hasMoreAnnouncements) {
+                const announcementsUrl = `${CANVAS_BASE_URL}/announcements?context_codes[]=course_${courseId}&page=${page}&per_page=10&access_token=${token}`;
+                try {
+                    const announcementsResponse = await fetch(announcementsUrl);
+                    
+                    const announcements: RawAnnouncement[] = await announcementsResponse.json();
+                    
+                    // If we get no announcements back, we've reached the end of pagination
+                    if (announcements.length === 0) {
+                        hasMoreAnnouncements = false;
+                    } else {
+                        allAnnouncements = [...allAnnouncements, ...announcements];
+                        console.log(`Fetched ${announcements.length} announcements for course ${courseId} (page ${page})`);
+                        page++;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching announcements page ${page} for course ${courseId}:`, error);
+                    hasMoreAnnouncements = false; // Stop on error
                 }
-            } catch (error) {
-                console.error(`Error fetching announcements page ${page} for course ${courseId}:`, error);
-                hasMoreAnnouncements = false; // Stop on error
             }
+            
+            console.log(`Fetched a total of ${allAnnouncements.length} announcements for course ${courseId}`);
+            
+            // Convert announcements to our app's Document format and add to allDocuments
+            const announcementDocs = allAnnouncements.map(convertAnnouncementToDocument);
+            allDocuments = [...allDocuments, ...announcementDocs];
         }
         
-        console.log(`Fetched a total of ${allAnnouncements.length} announcements for course ${courseId}`);
-        
-        // Convert to our app's Document format
-        const assignmentDocs = allAssignments.map(convertAssignmentToDocument);
-        const announcementDocs = allAnnouncements.map(convertAnnouncementToDocument);
-        
-        // Combine all document types
-        const allDocuments = [...assignmentDocs, ...announcementDocs];
-        
-        console.log(`Fetched ${allDocuments.length} total documents for course ${courseId} (${assignmentDocs.length} assignments, ${announcementDocs.length} announcements)`);
+        console.log(`Fetched ${allDocuments.length} total documents for course ${courseId} (${assignmentDocs.length} assignments${includeAnnouncements ? `, ${allDocuments.length - assignmentDocs.length} announcements` : ''})`);
         return allDocuments;
     } catch (error) {
         console.error(`Error fetching documents for course ${courseId}:`, error);

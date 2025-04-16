@@ -869,15 +869,15 @@ export const processJsonTaskResponse = (jsonString: string, courses: Course[]): 
                                 console.log(`    Task has no document references`);
                             }
                             
-                            // Ensure all required fields are present
+                            // Ensure all required fields are present and generate new UUIDs
                             const processedTask = {
-                                id: task.id || uuidv4(),
+                                id: uuidv4(), // Always generate a new UUID for the task
                                 type: task.type || 'assignment',
                                 due_date: task.due_date || new Date().toISOString(),
                                 task_description: task.task_description || 'Untitled Task',
                                 subtasks: Array.isArray(task.subtasks) 
                                     ? task.subtasks.map((subtask: any) => ({
-                                        id: subtask.id || uuidv4(),
+                                        id: uuidv4(), // Always generate a new UUID for each subtask
                                         description: subtask.description || 'Untitled Subtask',
                                         expected_time: subtask.expected_time || 1,
                                         current_percentage_completed: subtask.current_percentage_completed || 0

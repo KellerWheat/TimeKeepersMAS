@@ -24,46 +24,13 @@ const CANVAS_CONFIG = {
     tokenStorageKey: 'canvas_access_token'
 };
 
-// Date picker options
-const MONTHS = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-};
-
-const generateYears = () => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let i = currentYear - 1; i <= currentYear + 3; i++) {
-        years.push(i);
-    }
-    return years;
-};
-
 const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { setToken, updateData, resetAppData } = useAppData();
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [date, setDate] = useState(new Date());
-    const [dateString, setDateString] = useState(new Date().toLocaleDateString());
-    
-    // Token input state
+    const { setToken, updateData, updateMetrics } = useAppData();
     const [tokenInputVisible, setTokenInputVisible] = useState(false);
     const [tokenInput, setTokenInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    
-    // Saved token state
     const [hasSavedToken, setHasSavedToken] = useState(false);
     const [savedToken, setSavedToken] = useState('');
-    
-    // Date picker state
-    const [selectedMonth, setSelectedMonth] = useState(date.getMonth());
-    const [selectedDay, setSelectedDay] = useState(date.getDate());
-    const [selectedYear, setSelectedYear] = useState(date.getFullYear());
-    const [daysInMonth, setDaysInMonth] = useState(getDaysInMonth(selectedMonth, selectedYear));
-    const years = generateYears();
 
     useEffect(() => {
         // Check for existing token on mount
@@ -103,7 +70,7 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
     const continueWithSavedToken = () => {
         setToken(savedToken);
-        updateData({ current_date: date });
+        updateData({ current_date: new Date() });
         navigation.navigate('Courses');
     };
 
@@ -111,7 +78,13 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         try {
             await AsyncStorage.setItem(CANVAS_CONFIG.tokenStorageKey, token);
             setToken(token);
-            updateData({ current_date: date });
+            updateData({ current_date: new Date() });
+            // Get user data from the token verification response
+            const result = await verifyCanvasToken(token);
+            if (result.valid && result.userData) {
+                updateMetrics({ userName: result.userData.name });
+            }
+            setTokenInputVisible(false); // Close the modal
             navigation.navigate('Courses');
         } catch (error) {
             console.error('Error saving token:', error);
@@ -150,197 +123,42 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         });
     };
 
-    const showDatePickerModal = () => {
-        // Update selector values to match current date
-        setSelectedMonth(date.getMonth());
-        setSelectedDay(date.getDate());
-        setSelectedYear(date.getFullYear());
-        setDaysInMonth(getDaysInMonth(date.getMonth(), date.getFullYear()));
-        setShowDatePicker(true);
-    };
-
-    const handleMonthChange = (index: number) => {
-        setSelectedMonth(index);
-        const newDaysInMonth = getDaysInMonth(index, selectedYear);
-        setDaysInMonth(newDaysInMonth);
-        
-        // Adjust selected day if it exceeds the new month's days
-        if (selectedDay > newDaysInMonth) {
-            setSelectedDay(newDaysInMonth);
-        }
-    };
-
-    const handleYearChange = (year: number) => {
-        setSelectedYear(year);
-        const newDaysInMonth = getDaysInMonth(selectedMonth, year);
-        setDaysInMonth(newDaysInMonth);
-        
-        // Adjust selected day if it exceeds the new month's days
-        if (selectedDay > newDaysInMonth) {
-            setSelectedDay(newDaysInMonth);
-        }
-    };
-
-    const handleDateConfirm = () => {
-        const newDate = new Date(selectedYear, selectedMonth, selectedDay);
-        setDate(newDate);
-        setDateString(newDate.toLocaleDateString());
-        setShowDatePicker(false);
-    };
-
-    const handleResetData = () => {
-        Alert.alert(
-            "Reset All Data",
-            "This will reset all app data including your Canvas token and course information. Are you sure?",
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
-                {
-                    text: "Reset",
-                    style: "destructive",
-                    onPress: async () => {
-                        setIsLoading(true);
-                        try {
-                            await resetAppData();
-                            // Reset local state
-                            setHasSavedToken(false);
-                            setSavedToken('');
-                            setDate(new Date());
-                            setDateString(new Date().toLocaleDateString());
-                            Alert.alert("Success", "All app data has been reset successfully.");
-                        } catch (error) {
-                            console.error('Error resetting data:', error);
-                            Alert.alert("Error", "Failed to reset app data. Please try again.");
-                        } finally {
-                            setIsLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
-    };
-
     return (
         <View style={sharedStyles.container}>
-            <Text style={sharedStyles.screenTitle}>Canvas Login</Text>
+            <View style={styles.headerContainer}>
+                <Text style={sharedStyles.screenTitle}>Canvas Login</Text>
+                <TouchableOpacity 
+                    style={styles.settingsButton}
+                    onPress={() => navigation.navigate('Settings')}
+                >
+                    <Text style={styles.settingsIcon}>⚙️</Text>
+                </TouchableOpacity>
+            </View>
             <Text style={sharedStyles.text}>Welcome to Canvas. Please log in to continue.</Text>
             
-            {/* Test Date Input */}
-            <View style={styles.dateContainer}>
-                <Text style={styles.dateLabel}>Test Date (for testing):</Text>
+            {/* Continue with Saved Token button */}
+            {hasSavedToken && (
                 <TouchableOpacity 
-                    style={styles.dateInputContainer}
-                    onPress={showDatePickerModal}
+                    style={[sharedStyles.button, styles.continueButton]} 
+                    onPress={continueWithSavedToken}
+                    disabled={isLoading}
                 >
-                    <TextInput
-                        style={styles.dateInput}
-                        value={dateString}
-                        editable={false}
-                        placeholder="Select a date"
-                    />
-                    <Text style={styles.calendarIcon}>📅</Text>
+                    <Text style={sharedStyles.buttonText}>
+                        Continue with Saved Token
+                    </Text>
                 </TouchableOpacity>
-                <Text style={styles.dateHelp}>
-                    Use this to simulate different dates for testing assignment due dates
-                </Text>
-            </View>
+            )}
             
-            {/* Custom Date Picker Modal */}
-            <Modal
-                visible={showDatePicker}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowDatePicker(false)}
+            <TouchableOpacity 
+                style={[sharedStyles.button, styles.tokenButton]} 
+                onPress={() => setTokenInputVisible(true)}
+                disabled={isLoading}
             >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Date</Text>
-                        
-                        <View style={styles.pickerContainer}>
-                            {/* Month Selector */}
-                            <View style={styles.selectorColumn}>
-                                <Text style={styles.selectorLabel}>Month</Text>
-                                <ScrollView style={styles.selector}>
-                                    {MONTHS.map((month, index) => (
-                                        <TouchableOpacity
-                                            key={month}
-                                            style={[
-                                                styles.selectorItem,
-                                                index === selectedMonth ? styles.selectedItem : null
-                                            ]}
-                                            onPress={() => handleMonthChange(index)}
-                                        >
-                                            <Text style={index === selectedMonth ? styles.selectedItemText : styles.selectorItemText}>
-                                                {month}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                            
-                            {/* Day Selector */}
-                            <View style={styles.selectorColumn}>
-                                <Text style={styles.selectorLabel}>Day</Text>
-                                <ScrollView style={styles.selector}>
-                                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => (
-                                        <TouchableOpacity
-                                            key={day}
-                                            style={[
-                                                styles.selectorItem,
-                                                day === selectedDay ? styles.selectedItem : null
-                                            ]}
-                                            onPress={() => setSelectedDay(day)}
-                                        >
-                                            <Text style={day === selectedDay ? styles.selectedItemText : styles.selectorItemText}>
-                                                {day}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                            
-                            {/* Year Selector */}
-                            <View style={styles.selectorColumn}>
-                                <Text style={styles.selectorLabel}>Year</Text>
-                                <ScrollView style={styles.selector}>
-                                    {years.map(year => (
-                                        <TouchableOpacity
-                                            key={year}
-                                            style={[
-                                                styles.selectorItem,
-                                                year === selectedYear ? styles.selectedItem : null
-                                            ]}
-                                            onPress={() => handleYearChange(year)}
-                                        >
-                                            <Text style={year === selectedYear ? styles.selectedItemText : styles.selectorItemText}>
-                                                {year}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        </View>
-                        
-                        <View style={styles.modalButtonContainer}>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.cancelButton]} 
-                                onPress={() => setShowDatePicker(false)}
-                            >
-                                <Text style={styles.modalButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.confirmButton]} 
-                                onPress={handleDateConfirm}
-                            >
-                                <Text style={styles.modalButtonText}>Confirm</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-            
+                <Text style={sharedStyles.buttonText}>
+                    Login with Canvas Token
+                </Text>
+            </TouchableOpacity>
+
             {/* Token Input Modal */}
             <Modal
                 visible={tokenInputVisible}
@@ -381,7 +199,7 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                         </View>
                         
                         <TouchableOpacity 
-                            style={styles.settingsButton}
+                            style={styles.openSettingsButton}
                             onPress={openCanvasSettings}
                         >
                             <Text style={styles.settingsButtonText}>Open Canvas Settings</Text>
@@ -423,83 +241,25 @@ const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     </View>
                 </View>
             </Modal>
-            
-            {/* Continue with Saved Token button */}
-            {hasSavedToken && (
-                <TouchableOpacity 
-                    style={[sharedStyles.button, styles.continueButton]} 
-                    onPress={continueWithSavedToken}
-                    disabled={isLoading}
-                >
-                    <Text style={sharedStyles.buttonText}>
-                        Continue with Saved Token
-                    </Text>
-                </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-                style={[sharedStyles.button, styles.tokenButton]} 
-                onPress={() => setTokenInputVisible(true)}
-                disabled={isLoading}
-            >
-                <Text style={sharedStyles.buttonText}>
-                    Login with Canvas Token
-                </Text>
-            </TouchableOpacity>
-
-            {/* Reset App Data Button */}
-            <TouchableOpacity 
-                style={[sharedStyles.button, styles.resetButton]} 
-                onPress={handleResetData}
-                disabled={isLoading}
-            >
-                <Text style={sharedStyles.buttonText}>
-                    Reset All Data
-                </Text>
-            </TouchableOpacity>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    dateContainer: {
-        marginVertical: 12,
-        width: '100%',
-        paddingHorizontal: 16,
-    },
-    dateLabel: {
-        fontSize: 16,
-        fontWeight: '500',
-        marginBottom: 8,
-        color: '#2c3e50',
-    },
-    dateInputContainer: {
+    headerContainer: {
         flexDirection: 'row',
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        height: 48,
+        justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        marginBottom: 16,
+        position: 'relative',
     },
-    dateInput: {
-        flex: 1,
-        paddingHorizontal: 12,
+    settingsButton: {
+        position: 'absolute',
+        right: 0,
+        padding: 8,
+    },
+    settingsIcon: {
         fontSize: 16,
-    },
-    calendarIcon: {
-        paddingHorizontal: 12,
-        fontSize: 20,
-    },
-    dateHelp: {
-        fontSize: 12,
-        color: '#7f8c8d',
-        marginTop: 4,
-        fontStyle: 'italic',
-    },
-    loginButton: {
-        marginTop: 12,
-        backgroundColor: '#95a5a6',
     },
     tokenButton: {
         marginTop: 20,
@@ -531,7 +291,7 @@ const styles = StyleSheet.create({
         color: '#333',
         marginBottom: 6,
     },
-    settingsButton: {
+    openSettingsButton: {
         backgroundColor: '#2980b9',
         borderRadius: 8,
         padding: 12,
@@ -564,47 +324,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginBottom: 15,
         color: '#2c3e50',
-    },
-    pickerContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginBottom: 20,
-    },
-    selectorColumn: {
-        flex: 1,
-        alignItems: 'center',
-        marginHorizontal: 5,
-    },
-    selectorLabel: {
-        fontSize: 14,
-        fontWeight: '500',
-        marginBottom: 8,
-        color: '#2c3e50',
-    },
-    selector: {
-        height: 150,
-        width: '100%',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 5,
-    },
-    selectorItem: {
-        padding: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    selectorItemText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    selectedItem: {
-        backgroundColor: '#e3f2fd',
-    },
-    selectedItemText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#2980b9',
     },
     modalButtonContainer: {
         flexDirection: 'row',
@@ -639,11 +358,7 @@ const styles = StyleSheet.create({
         borderRadius: 5,
         minWidth: 100,
         alignItems: 'center',
-    },
-    resetButton: {
-        marginTop: 20,
-        backgroundColor: '#e74c3c',
-    },
+    }
 });
 
 export default LoginScreen;

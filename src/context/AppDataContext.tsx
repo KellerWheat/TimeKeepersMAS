@@ -74,6 +74,18 @@ export interface UserPreferences {
     calendarDayEndHour: number; // Hour to end calendar view (e.g., 22 for 10:00 PM)
 }
 
+export interface Metrics {
+    generationType: 'A' | 'B'; // A: assignments and announcements, B: just assignments
+    schedulingType: 'A' | 'B'; // A: tasks close together, B: tasks spread evenly
+    subtasksAdded: number;
+    subtasksRemoved: number;
+    tasksAdded: number;
+    tasksRemoved: number;
+    scheduleChanges: number;
+    scheduleRegenerations: number;
+    userName: string; // Add user's name to metrics
+}
+
 export interface AppData {
     token: string | null;
     courses: Course[];
@@ -81,6 +93,7 @@ export interface AppData {
     preferences: UserPreferences;
     weeklySchedule: WeeklySchedule;
     scheduledTasks: ScheduledTime[]; // All scheduled subtasks
+    metrics: Metrics;
 }
 
 // Add type for Firestore document data
@@ -140,6 +153,7 @@ export interface AppDataContextType {
     isLoading: boolean;
     toggleTaskApproval: (courseId: string, taskId: string) => void; // Toggle a task's approval status
     manuallyScheduleTask: (subtaskId: string, courseId: string, taskId: string, day: string, startTime: number, endTime: number) => void; // Manually schedule a task
+    updateMetrics: (metrics: Partial<Metrics>) => void;
 }
 
 // Keys for AsyncStorage
@@ -150,13 +164,65 @@ const STORAGE_KEYS = {
 
 // Default weekly schedule with some reasonable availability
 const defaultWeeklySchedule: WeeklySchedule = {
-    0: { available_blocks: [{ id: '0-1', start_time: 820, end_time: 1320 }] }, // Sunday
-    1: { available_blocks: [{ id: '1-1', start_time: 540, end_time: 720 }, { id: '1-2', start_time: 840, end_time: 1020 }] }, // Monday
-    2: { available_blocks: [{ id: '2-1', start_time: 540, end_time: 720 }, { id: '2-2', start_time: 840, end_time: 1020 }] }, // Tuesday
-    3: { available_blocks: [{ id: '3-1', start_time: 540, end_time: 720 }, { id: '3-2', start_time: 840, end_time: 1020 }] }, // Wednesday
-    4: { available_blocks: [{ id: '4-1', start_time: 540, end_time: 720 }, { id: '4-2', start_time: 840, end_time: 1020 }] }, // Thursday
-    5: { available_blocks: [{ id: '5-1', start_time: 540, end_time: 720 }, { id: '5-2', start_time: 840, end_time: 1020 }] }, // Friday
-    6: { available_blocks: [{ id: '6-1', start_time: 820, end_time: 1320 }] }, // Saturday
+    0: { available_blocks: [] }, // Sunday - no availability
+    1: { // Monday
+        available_blocks: [
+            { id: '1-1', start_time: 480, end_time: 600 }, // 8-10 AM
+            { id: '1-2', start_time: 600, end_time: 720 }, // 10-12 PM
+            { id: '1-3', start_time: 720, end_time: 840 }, // 12-2 PM
+            { id: '1-4', start_time: 840, end_time: 960 }, // 2-4 PM
+            { id: '1-5', start_time: 960, end_time: 1080 }, // 4-6 PM
+        ]
+    },
+    2: { // Tuesday
+        available_blocks: [
+            { id: '2-1', start_time: 480, end_time: 600 }, // 8-10 AM
+            { id: '2-2', start_time: 600, end_time: 720 }, // 10-12 PM
+            { id: '2-3', start_time: 720, end_time: 840 }, // 12-2 PM
+            { id: '2-4', start_time: 840, end_time: 960 }, // 2-4 PM
+            { id: '2-5', start_time: 960, end_time: 1080 }, // 4-6 PM
+        ]
+    },
+    3: { // Wednesday
+        available_blocks: [
+            { id: '3-1', start_time: 480, end_time: 600 }, // 8-10 AM
+            { id: '3-2', start_time: 600, end_time: 720 }, // 10-12 PM
+            { id: '3-3', start_time: 720, end_time: 840 }, // 12-2 PM
+            { id: '3-4', start_time: 840, end_time: 960 }, // 2-4 PM
+            { id: '3-5', start_time: 960, end_time: 1080 }, // 4-6 PM
+        ]
+    },
+    4: { // Thursday
+        available_blocks: [
+            { id: '4-1', start_time: 480, end_time: 600 }, // 8-10 AM
+            { id: '4-2', start_time: 600, end_time: 720 }, // 10-12 PM
+            { id: '4-3', start_time: 720, end_time: 840 }, // 12-2 PM
+            { id: '4-4', start_time: 840, end_time: 960 }, // 2-4 PM
+            { id: '4-5', start_time: 960, end_time: 1080 }, // 4-6 PM
+        ]
+    },
+    5: { // Friday
+        available_blocks: [
+            { id: '5-1', start_time: 480, end_time: 600 }, // 8-10 AM
+            { id: '5-2', start_time: 600, end_time: 720 }, // 10-12 PM
+            { id: '5-3', start_time: 720, end_time: 840 }, // 12-2 PM
+            { id: '5-4', start_time: 840, end_time: 960 }, // 2-4 PM
+            { id: '5-5', start_time: 960, end_time: 1080 }, // 4-6 PM
+        ]
+    },
+    6: { available_blocks: [] }, // Saturday - no availability
+};
+
+const defaultMetrics: Metrics = {
+    generationType: Math.random() < 0.5 ? 'A' : 'B',
+    schedulingType: Math.random() < 0.5 ? 'A' : 'B',
+    subtasksAdded: 0,
+    subtasksRemoved: 0,
+    tasksAdded: 0,
+    tasksRemoved: 0,
+    scheduleChanges: 0,
+    scheduleRegenerations: 0,
+    userName: '' // Initialize with empty string
 };
 
 const defaultData: AppData = {
@@ -170,6 +236,7 @@ const defaultData: AppData = {
     },
     weeklySchedule: defaultWeeklySchedule,
     scheduledTasks: [],
+    metrics: defaultMetrics
 };
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -319,6 +386,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                       }
                     : course
             ),
+            metrics: {
+                ...prev.metrics,
+                tasksRemoved: prev.metrics.tasksRemoved + 1
+            }
         }));
     };
 
@@ -334,6 +405,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                       }
                     : course
             ),
+            metrics: {
+                ...prev.metrics,
+                tasksAdded: prev.metrics.tasksAdded + 1
+            }
         }));
         
         // Sync with Firestore
@@ -381,6 +456,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                       }
                     : course
             ),
+            metrics: {
+                ...prev.metrics,
+                subtasksRemoved: prev.metrics.subtasksRemoved + 1
+            }
         }));
     };
 
@@ -427,6 +506,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                       }
                     : course
             ),
+            metrics: {
+                ...prev.metrics,
+                subtasksAdded: prev.metrics.subtasksAdded + 1
+            }
         }));
     };
 
@@ -452,20 +535,20 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
     const updateWeeklySchedule = (schedule: Partial<WeeklySchedule>) => {
         setData((prev) => {
-            // Create a properly typed merged schedule
-            const mergedSchedule: WeeklySchedule = { ...prev.weeklySchedule };
+            // Create a new schedule with only the days that have blocks
+            const newSchedule: WeeklySchedule = {};
             
             // Process each day in the update
             Object.entries(schedule).forEach(([dayKey, dayValue]) => {
                 const day = parseInt(dayKey);
-                if (!isNaN(day) && dayValue) {
-                    mergedSchedule[day] = dayValue;
+                if (!isNaN(day) && dayValue && dayValue.available_blocks.length > 0) {
+                    newSchedule[day] = dayValue;
                 }
             });
             
             return {
                 ...prev,
-                weeklySchedule: mergedSchedule
+                weeklySchedule: newSchedule
             };
         });
     };
@@ -633,10 +716,30 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
             
             const daySchedule = data.weeklySchedule[dayOfWeek];
-            if (daySchedule && daySchedule.available_blocks.length > 0) {
+            if (daySchedule && daySchedule.available_blocks && daySchedule.available_blocks.length > 0) {
+                // Sort available blocks by start time
+                const sortedBlocks = [...daySchedule.available_blocks].sort((a, b) => a.start_time - b.start_time);
+                
+                // Merge overlapping blocks
+                const mergedBlocks: TimeBlock[] = [];
+                let currentBlock = sortedBlocks[0];
+                
+                for (let i = 1; i < sortedBlocks.length; i++) {
+                    const nextBlock = sortedBlocks[i];
+                    if (nextBlock.start_time <= currentBlock.end_time) {
+                        // Blocks overlap, merge them
+                        currentBlock.end_time = Math.max(currentBlock.end_time, nextBlock.end_time);
+                    } else {
+                        // No overlap, add current block and move to next
+                        mergedBlocks.push(currentBlock);
+                        currentBlock = nextBlock;
+                    }
+                }
+                mergedBlocks.push(currentBlock);
+                
                 availableSlots.push({
                     day: dayStr,
-                    slots: daySchedule.available_blocks.map(block => ({
+                    slots: mergedBlocks.map(block => ({
                         start: block.start_time,
                         end: block.end_time
                     }))
@@ -684,7 +787,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             }
         });
 
-        // Schedule each subtask
+        // Schedule each subtask based on the scheduling type
         allSubtasks.forEach(({ subtask, task, courseId, dueDate }) => {
             // Skip if already 100% complete
             if (subtask.current_percentage_completed >= 100) {
@@ -703,106 +806,90 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                 return;
             }
 
-            // Try to find a slot
-            // First look at days closer to the due date
-            for (let i = availableSlots.length - 1; i >= 0; i--) {
-                const daySlot = availableSlots[i];
-                
-                if (daySlot.day > dueDateOnly) {
-                    continue;
-                }
-                
-                // Try to find a slot in this day
-                for (let j = 0; j < daySlot.slots.length; j++) {
-                    const slot = daySlot.slots[j];
-                    const slotDuration = slot.end - slot.start;
-                    
-                    // Skip if slot is too small
-                    if (slotDuration < timeNeededMinutes) {
-                        continue;
+            // Get the scheduling type from metrics
+            const schedulingType = data.metrics.schedulingType;
+
+            // Find available days before the due date
+            const availableDays = availableSlots.filter(slot => slot.day <= dueDateOnly);
+
+            if (schedulingType === 'A') {
+                // Type A: Schedule as early as possible
+                // Try to find the earliest available slot
+                for (const daySlot of availableDays) {
+                    for (let i = 0; i < daySlot.slots.length; i++) {
+                        const slot = daySlot.slots[i];
+                        const slotDuration = slot.end - slot.start;
+                        
+                        if (slotDuration >= timeNeededMinutes) {
+                            // Found a slot! Create a scheduled time
+                            const scheduledTime: ScheduledTime = {
+                                id: `${subtask.id}-${daySlot.day}`,
+                                day: daySlot.day,
+                                start_time: slot.start,
+                                end_time: slot.start + timeNeededMinutes,
+                                subtask_id: subtask.id,
+                                course_id: courseId,
+                                task_id: task.id,
+                                user_set: false
+                            };
+                            
+                            newScheduledTasks.push(scheduledTime);
+                            
+                            // Update the slot
+                            slot.start += timeNeededMinutes;
+                            
+                            // If slot is now too small, remove it
+                            if (slot.end - slot.start < 15) {
+                                daySlot.slots.splice(i, 1);
+                            }
+                            
+                            return; // We've scheduled this subtask
+                        }
                     }
-                    
-                    // Found a slot! Create a scheduled time
-                    const scheduledTime: ScheduledTime = {
-                        id: `${subtask.id}-${daySlot.day}`,
-                        day: daySlot.day,
-                        start_time: slot.start,
-                        end_time: slot.start + timeNeededMinutes,
-                        subtask_id: subtask.id,
-                        course_id: courseId,
-                        task_id: task.id,
-                        user_set: false // Set by the system, not the user
-                    };
-                    
-                    newScheduledTasks.push(scheduledTime);
-                    
-                    // Update the slot
-                    slot.start += timeNeededMinutes;
-                    
-                    // If slot is now too small, remove it
-                    if (slot.end - slot.start < 15) { // Minimum 15 minutes
-                        daySlot.slots.splice(j, 1);
-                        j--;
-                    }
-                    
-                    // We've scheduled this subtask, so break out of the inner loop
-                    break;
                 }
+            } else {
+                // Type B: Evenly spread out tasks
+                // Calculate how many days we have to work with
+                const daysToSchedule = availableDays.length;
+                if (daysToSchedule === 0) return;
+
+                // Add some randomness to the scheduling
+                const randomOffset = Math.floor(Math.random() * daysToSchedule);
                 
-                // If we've scheduled this subtask, break out of the outer loop
-                if (newScheduledTasks.some(st => st.subtask_id === subtask.id && !preservedSchedules.includes(st))) {
-                    break;
-                }
-            }
-            
-            // If we couldn't schedule on preferred days, look at all days
-            if (!newScheduledTasks.some(st => st.subtask_id === subtask.id && !preservedSchedules.includes(st))) {
-                for (let i = 0; i < availableSlots.length; i++) {
-                    const daySlot = availableSlots[i];
-                    // Skip days that are after the due date
-                    if (daySlot.day > dueDateOnly) {
-                        continue;
-                    }
-                    // Try to find a slot in this day
+                // Try to find a slot in a random day
+                for (let i = 0; i < daysToSchedule; i++) {
+                    const dayIndex = (i + randomOffset) % daysToSchedule;
+                    const daySlot = availableDays[dayIndex];
+                    
                     for (let j = 0; j < daySlot.slots.length; j++) {
                         const slot = daySlot.slots[j];
                         const slotDuration = slot.end - slot.start;
                         
-                        // Skip if slot is too small
-                        if (slotDuration < timeNeededMinutes) {
-                            continue;
+                        if (slotDuration >= timeNeededMinutes) {
+                            // Found a slot! Create a scheduled time
+                            const scheduledTime: ScheduledTime = {
+                                id: `${subtask.id}-${daySlot.day}`,
+                                day: daySlot.day,
+                                start_time: slot.start,
+                                end_time: slot.start + timeNeededMinutes,
+                                subtask_id: subtask.id,
+                                course_id: courseId,
+                                task_id: task.id,
+                                user_set: false
+                            };
+                            
+                            newScheduledTasks.push(scheduledTime);
+                            
+                            // Update the slot
+                            slot.start += timeNeededMinutes;
+                            
+                            // If slot is now too small, remove it
+                            if (slot.end - slot.start < 15) {
+                                daySlot.slots.splice(j, 1);
+                            }
+                            
+                            return; // We've scheduled this subtask
                         }
-                        
-                        // Found a slot! Create a scheduled time
-                        const scheduledTime: ScheduledTime = {
-                            id: `${subtask.id}-${daySlot.day}`,
-                            day: daySlot.day,
-                            start_time: slot.start,
-                            end_time: slot.start + timeNeededMinutes,
-                            subtask_id: subtask.id,
-                            course_id: courseId,
-                            task_id: task.id,
-                            user_set: false // Set by the system, not the user
-                        };
-                        
-                        newScheduledTasks.push(scheduledTime);
-                        
-                        // Update the slot
-                        slot.start += timeNeededMinutes;
-                        
-                        // If slot is now too small, remove it
-                        if (slot.end - slot.start < 15) { // Minimum 15 minutes
-                            daySlot.slots.splice(j, 1);
-                            j--;
-                        }
-                        
-                        // We've scheduled this subtask, so break out of the inner loop
-                        break;
-                    }
-                    
-                    // If we've scheduled this subtask, break out of the outer loop
-                    if (newScheduledTasks.some(st => st.subtask_id === subtask.id && !preservedSchedules.includes(st))) {
-                        break;
                     }
                 }
             }
@@ -811,7 +898,11 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         // Update the scheduled tasks
         setData((prev) => ({
             ...prev,
-            scheduledTasks: newScheduledTasks
+            scheduledTasks: newScheduledTasks,
+            metrics: {
+                ...prev.metrics,
+                scheduleRegenerations: prev.metrics.scheduleRegenerations + 1
+            }
         }));
     };
 
@@ -823,12 +914,17 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
             // Clear stored data
             await AsyncStorage.removeItem(STORAGE_KEYS.CANVAS_TOKEN);
             
+            // Generate new UUID
+            const newUserId = uuidv4();
+            await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, newUserId);
+            setUserId(newUserId);
+            
             // Reset state to defaults
             setData(defaultData);
             
-            // Save default data to Firestore
-            const userDocRef = doc(db, 'users', userId);
-            await setDoc(userDocRef, defaultData);
+            // Save default data to Firestore with new user ID
+            const userDocRef = doc(db, 'users', newUserId);
+            await setDoc(userDocRef, convertToFirestoreData(defaultData));
             
             return Promise.resolve();
         } catch (error) {
@@ -859,8 +955,32 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         // Update the data
         setData(prev => ({
             ...prev,
-            scheduledTasks: newSchedules
+            scheduledTasks: newSchedules,
+            metrics: {
+                ...prev.metrics,
+                scheduleChanges: prev.metrics.scheduleChanges + 1
+            }
         }));
+    };
+
+    const updateMetrics = async (metrics: Partial<Metrics>) => {
+        // Update local state
+        setData((prev) => ({
+            ...prev,
+            metrics: { ...prev.metrics, ...metrics }
+        }));
+        
+        // Immediately sync with Firestore
+        if (userId && !isLoading) {
+            try {
+                const userDocRef = doc(db, 'users', userId);
+                const currentData = { ...data, metrics: { ...data.metrics, ...metrics } };
+                const firestoreData = convertToFirestoreData(currentData);
+                await updateDoc(userDocRef, firestoreData);
+            } catch (error) {
+                console.error('Error saving metrics to Firestore:', error);
+            }
+        }
     };
 
     return (
@@ -888,6 +1008,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                 isLoading,
                 toggleTaskApproval,
                 manuallyScheduleTask,
+                updateMetrics,
             }}
         >
             {children}
