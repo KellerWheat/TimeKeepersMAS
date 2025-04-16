@@ -187,6 +187,7 @@ const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
     onSelect,
     courses,
 }) => {
+    console.log('CourseSelectionModal rendered with courses:', courses);
     return (
         <Modal
             visible={visible}
@@ -203,7 +204,10 @@ const CourseSelectionModal: React.FC<CourseSelectionModalProps> = ({
                         renderItem={({ item }) => (
                             <TouchableOpacity
                                 style={sharedStyles.courseItem}
-                                onPress={() => onSelect(item.id)}
+                                onPress={() => {
+                                    console.log('Course selected:', item.id);
+                                    onSelect(item.id);
+                                }}
                             >
                                 <Text style={sharedStyles.courseItemText}>{item.name}</Text>
                             </TouchableOpacity>
@@ -310,18 +314,33 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
         }
     };
 
-    const handleNewTask = (courseId: string) => {
+    const handleNewTask = async (courseId: string) => {
+        console.log('handleNewTask called with courseId:', courseId);
+        // Get tomorrow's date
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
         const newTask: Task = {
             id: uuidv4(),
             type: 'assignment',
-            due_date: '',
-            task_description: '',
+            due_date: tomorrow.toISOString().split('T')[0], // Set default due date to tomorrow
+            task_description: 'New Task',
             subtasks: [],
             documents: [],
-            approved_by_user: true,
+            approved_by_user: true, // Start approved by default
         };
-        addTask(courseId, newTask);
-        setShowCourseModal(false);
+        console.log('Created new task:', newTask);
+        try {
+            console.log('Attempting to add task to course:', courseId);
+            await addTask(courseId, newTask);
+            console.log('Task added successfully');
+            setShowCourseModal(false);
+            // Expand the new task
+            setExpandedTaskIds(prev => [...prev, newTask.id]);
+        } catch (error) {
+            console.error('Error adding new task:', error);
+            // You might want to show an error message to the user here
+        }
     };
 
     const handleScheduleTasks = useCallback(() => {

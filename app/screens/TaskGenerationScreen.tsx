@@ -105,33 +105,27 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                 return;
             }
 
-            const navigateToTaskReview = () => {
-                console.log("All tasks generated successfully. Navigating to TaskReview screen.");
-                setLoading(false);
-                navigation.navigate('TaskReview');
-                setHasHandledNavigation(true);
-                return;
-            };
-
             try {
                 // Check if we've generated tasks recently
-                // if (preferences.lastTaskGenerationDate) {
-                //     const lastGenTime = new Date(preferences.lastTaskGenerationDate).getTime();
-                //     const currentTime = new Date().getTime();
-                //     const hoursSinceLastGen = (currentTime - lastGenTime) / (1000 * 60 * 60);
-                //     if (hoursSinceLastGen < MIN_HOURS_BETWEEN_GENERATIONS) {
-                //         console.log(`Skipping task generation: Last generated ${hoursSinceLastGen.toFixed(1)} hours ago`);
-                //         navigateToTaskReview();
-                //         return;
-                //     }
-                // }
+                if (preferences.lastTaskGenerationDate) {
+                    const lastGenTime = new Date(preferences.lastTaskGenerationDate).getTime();
+                    const currentTime = new Date().getTime();
+                    const hoursSinceLastGen = (currentTime - lastGenTime) / (1000 * 60 * 60);
+                    if (hoursSinceLastGen < MIN_HOURS_BETWEEN_GENERATIONS) {
+                        console.log(`Skipping task generation: Last generated ${hoursSinceLastGen.toFixed(1)} hours ago`);
+                        navigation.navigate('TaskReview');
+                        setHasHandledNavigation(true);
+                        return;
+                    }
+                }
 
                 // Skip generation if courses already have tasks
-                // if (courses.some(course => course.tasks && course.tasks.length > 0)) {
-                //     console.log("Tasks already exist. Skipping generation.");
-                //     navigateToTaskReview();
-                //     return;
-                // }
+                if (courses.some(course => course.tasks && course.tasks.length > 0)) {
+                    console.log("Tasks already exist. Skipping generation.");
+                    navigation.navigate('TaskReview');
+                    setHasHandledNavigation(true);
+                    return;
+                }
 
                 // Step 1: Fetch courses if they don't exist
                 setStatus({ ...status, message: 'Fetching courses...' });
@@ -310,12 +304,27 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     message: 'Finalizing task generation...'
                 });
                 
-                // Update courses in the global state
-                setCourses(finalCourses);
+                // Update courses in the global state and wait for Firestore sync
+                await setCourses(finalCourses);
 
                 // Update the last task generation date
                 updatePreferences({ lastTaskGenerationDate: new Date() });
                 
+                // Add a delay to ensure state updates are processed
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Verify the data was saved
+                const savedCourses = data.courses;
+                if (savedCourses.length === 0) {
+                    console.error("Courses were not saved properly");
+                    setStatus({
+                        ...status,
+                        message: 'Error saving tasks. Please try again.'
+                    });
+                    setLoading(false);
+                    return;
+                }
+
                 // Navigate to the task review screen
                 setStatus({
                     totalDocuments,
@@ -323,8 +332,8 @@ const TaskGenerationScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
                     message: 'Task generation complete! Redirecting...'
                 });
                 
-                // Add a small delay to ensure state updates are processed
-                setTimeout(navigateToTaskReview, 500);
+                navigation.navigate('TaskReview');
+                setHasHandledNavigation(true);
             } catch (error) {
                 console.error('Error generating tasks:', error);
                 setStatus({

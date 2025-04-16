@@ -347,7 +347,7 @@ type CalendarScreenProps = {
     navigation: StackNavigationProps<'Calendar'>;
 };
 
-const CalendarScreen = ({ navigation }: CalendarScreenProps) => {
+const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
     const { data, updateSubtask, autoScheduleTasks, manuallyScheduleTask } = useAppData();
     const [selectedDate, setSelectedDate] = useState<Date>(new Date(data.current_date));
     const [selectedDateStr, setSelectedDateStr] = useState<string>(selectedDate.toISOString().split('T')[0]);

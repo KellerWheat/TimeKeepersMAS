@@ -1,6 +1,5 @@
 // api/canvasApi.ts
 import { Course, Document } from '@/src/context/AppDataContext';
-import { fetchWithCorsProxy } from './proxyUtils';
 
 const CURRENT_ENROLLMENT_TERM = 229;
 
@@ -8,7 +7,7 @@ const CURRENT_ENROLLMENT_TERM = 229;
 const TESTING_MODE = false;
 
 // Canvas API base URL
-const CANVAS_BASE_URL = 'https://gatech.instructure.com/api/v1';
+const CANVAS_BASE_URL = 'https://proxyserver-o32a.onrender.com/api/canvas';
 
 interface RawCourse {
     id: number;
@@ -81,7 +80,7 @@ export const fetchEnrolledCourses = async (token: string): Promise<Course[]> => 
         // Use the favorites API which returns the user's favorite/enrolled courses - no pagination needed
         const url = `${CANVAS_BASE_URL}/users/self/favorites/courses?access_token=${token}`;
         
-        const response = await fetchWithCorsProxy(url);
+        const response = await fetch(url);
         
         if (!response.ok) {
             console.error(`Error fetching courses: ${response.status} ${response.statusText}`);
@@ -130,7 +129,7 @@ export const fetchCourseCalendar = async (
         while (hasMoreEvents) {
             const url = `${CANVAS_BASE_URL}/courses/${courseId}/calendar_events?page=${page}&per_page=10&access_token=${token}`;
             try {
-                const response = await fetchWithCorsProxy(url);
+                const response = await fetch(url);
                 
                 const events = await response.json();
                 
@@ -170,7 +169,7 @@ export const fetchCourseDocuments = async (
         while (hasMoreAssignments) {
             const assignmentsUrl = `${CANVAS_BASE_URL}/courses/${courseId}/assignments?page=${page}&per_page=10&access_token=${token}`;
             try {
-                const assignmentsResponse = await fetchWithCorsProxy(assignmentsUrl);
+                const assignmentsResponse = await fetch(assignmentsUrl);
                 
                 const assignments: RawAssignment[] = await assignmentsResponse.json();
                 
@@ -199,7 +198,7 @@ export const fetchCourseDocuments = async (
         while (hasMoreAnnouncements) {
             const announcementsUrl = `${CANVAS_BASE_URL}/announcements?context_codes[]=course_${courseId}&page=${page}&per_page=10&access_token=${token}`;
             try {
-                const announcementsResponse = await fetchWithCorsProxy(announcementsUrl);
+                const announcementsResponse = await fetch(announcementsUrl);
                 
                 const announcements: RawAnnouncement[] = await announcementsResponse.json();
                 
@@ -242,7 +241,7 @@ export const fetchCourseDocuments = async (
 export const verifyCanvasToken = async (token: string): Promise<{valid: boolean, userData?: any}> => {
     try {
         const url = `${CANVAS_BASE_URL}/users/self?access_token=${token}`;
-        const response = await fetchWithCorsProxy(url);
+        const response = await fetch(url);
         
         const userData = await response.json();
         console.log('Token verified successfully. User data:', userData);

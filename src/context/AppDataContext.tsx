@@ -1,5 +1,8 @@
 import React, { createContext, useState, ReactNode, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from '../config/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface Subtask {
     id: string;
@@ -66,7 +69,7 @@ export interface Course {
 
 export interface UserPreferences {
     taskViewPeriodDays: number; // How many days ahead to show tasks
-    lastTaskGenerationDate?: Date; // Timestamp of last task generation
+    lastTaskGenerationDate?: Date | null; // Timestamp of last task generation
     calendarDayStartHour: number; // Hour to start calendar view (e.g., 8 for 8:00 AM)
     calendarDayEndHour: number; // Hour to end calendar view (e.g., 22 for 10:00 PM)
 }
@@ -79,6 +82,40 @@ export interface AppData {
     weeklySchedule: WeeklySchedule;
     scheduledTasks: ScheduledTime[]; // All scheduled subtasks
 }
+
+// Add type for Firestore document data
+type FirestoreAppData = Omit<AppData, 'current_date' | 'preferences'> & {
+    current_date: string;
+    preferences: Omit<UserPreferences, 'lastTaskGenerationDate'> & {
+        lastTaskGenerationDate: string | null;
+    };
+};
+
+// Helper function to convert AppData to Firestore format
+const convertToFirestoreData = (data: AppData): FirestoreAppData => {
+    return {
+        ...data,
+        current_date: data.current_date.toISOString(),
+        preferences: {
+            ...data.preferences,
+            lastTaskGenerationDate: data.preferences.lastTaskGenerationDate?.toISOString() || null,
+        },
+    };
+};
+
+// Helper function to convert Firestore data to AppData
+const convertFromFirestoreData = (data: FirestoreAppData): AppData => {
+    return {
+        ...data,
+        current_date: new Date(data.current_date),
+        preferences: {
+            ...data.preferences,
+            lastTaskGenerationDate: data.preferences.lastTaskGenerationDate 
+                ? new Date(data.preferences.lastTaskGenerationDate)
+                : null,
+        },
+    };
+};
 
 export interface AppDataContextType {
     data: AppData;
@@ -107,7 +144,7 @@ export interface AppDataContextType {
 
 // Keys for AsyncStorage
 const STORAGE_KEYS = {
-    APP_DATA: 'app_data',
+    USER_ID: 'user_id',
     CANVAS_TOKEN: 'canvas_access_token',
 };
 
@@ -144,74 +181,107 @@ interface AppDataProviderProps {
 export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) => {
     const [data, setData] = useState<AppData>(defaultData);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [userId, setUserId] = useState<string | null>(null);
 
-    // Load stored data on app start
+    // Load or create user ID and stored data on app start
     useEffect(() => {
-        const loadStoredData = async () => {
+        const initializeUser = async () => {
             try {
                 setIsLoading(true);
-                const storedDataJson = await AsyncStorage.getItem(STORAGE_KEYS.APP_DATA);
                 
-                if (storedDataJson) {
-                    const storedData = JSON.parse(storedDataJson);
-                    
-                    // Handle date conversion from string to Date objects
-                    if (storedData.current_date) {
-                        storedData.current_date = new Date(storedData.current_date);
-                    }
-                    if (storedData.preferences?.lastTaskGenerationDate) {
-                        storedData.preferences.lastTaskGenerationDate = 
-                            new Date(storedData.preferences.lastTaskGenerationDate);
-                    }
+                // Try to get existing user ID from AsyncStorage
+                let storedUserId = await AsyncStorage.getItem(STORAGE_KEYS.USER_ID);
+                
+                if (!storedUserId) {
+                    // Generate new UUID if none exists
+                    storedUserId = uuidv4();
+                    await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, storedUserId);
+                }
+                
+                setUserId(storedUserId);
+                
+                // Load data from Firestore
+                const userDocRef = doc(db, 'users', storedUserId);
+                const userDoc = await getDoc(userDocRef);
+                
+                if (userDoc.exists()) {
+                    const storedData = userDoc.data() as FirestoreAppData;
+                    const convertedData = convertFromFirestoreData(storedData);
                     
                     // Ensure all required fields exist
                     setData({
                         ...defaultData,
-                        ...storedData,
+                        ...convertedData,
                         preferences: {
                             ...defaultData.preferences,
-                            ...storedData.preferences,
+                            ...convertedData.preferences,
                         },
-                        weeklySchedule: storedData.weeklySchedule || defaultWeeklySchedule,
-                        scheduledTasks: storedData.scheduledTasks || [],
+                        weeklySchedule: convertedData.weeklySchedule || defaultWeeklySchedule,
+                        scheduledTasks: convertedData.scheduledTasks || [],
                     });
                 } else {
                     // First app start, initialize with defaults
                     setData(defaultData);
+                    // Save default data to Firestore
+                    const firestoreData = convertToFirestoreData(defaultData);
+                    await setDoc(userDocRef, firestoreData);
                 }
             } catch (error) {
-                console.error('Error loading stored app data:', error);
+                console.error('Error initializing user data:', error);
                 // Fallback to defaults on error
                 setData(defaultData);
-            } finally {
-                setIsLoading(false);
             }
+            setIsLoading(false);
         };
 
-        loadStoredData();
+        initializeUser();
     }, []);
 
-    // Save data to AsyncStorage whenever it changes
+    // Save data to Firestore whenever it changes
     useEffect(() => {
         const saveData = async () => {
+            if (!userId || isLoading) return;
+            
             try {
-                await AsyncStorage.setItem(STORAGE_KEYS.APP_DATA, JSON.stringify(data));
+                const userDocRef = doc(db, 'users', userId);
+                const firestoreData = convertToFirestoreData(data);
+                await updateDoc(userDocRef, firestoreData);
             } catch (error) {
                 console.error('Error saving app data:', error);
             }
         };
 
-        if (!isLoading) {
-            saveData();
-        }
-    }, [data, isLoading]);
+        saveData();
+    }, [data, userId, isLoading]);
 
     const setToken = (token: string) => {
         setData((prev) => ({ ...prev, token }));
     };
 
-    const setCourses = (courses: Course[]) => {
-        setData((prev) => ({ ...prev, courses }));
+    const setCourses = async (courses: Course[]) => {
+        console.log('Setting courses:', courses.length);
+        
+        // Update local state
+        setData((prev) => {
+            console.log('Updating local state with courses:', courses.length);
+            return { ...prev, courses };
+        });
+        
+        // Immediately sync with Firestore
+        if (userId && !isLoading) {
+            try {
+                console.log('Syncing with Firestore...');
+                const userDocRef = doc(db, 'users', userId);
+                const currentData = { ...data, courses };
+                const firestoreData = convertToFirestoreData(currentData);
+                await updateDoc(userDocRef, firestoreData);
+                console.log('Firestore sync complete');
+            } catch (error) {
+                console.error('Error saving courses to Firestore:', error);
+            }
+        } else {
+            console.log('Skipping Firestore sync:', { userId, isLoading });
+        }
     };
 
     const updateTask = (courseId: string, taskId: string, updatedTask: Partial<Task>) => {
@@ -252,7 +322,8 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         }));
     };
 
-    const addTask = (courseId: string, newTask: Task) => {
+    const addTask = async (courseId: string, newTask: Task) => {
+        // Update local state
         setData((prev) => ({
             ...prev,
             courses: prev.courses.map((course) =>
@@ -264,6 +335,22 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
                     : course
             ),
         }));
+        
+        // Sync with Firestore
+        if (userId && !isLoading) {
+            try {
+                const userDocRef = doc(db, 'users', userId);
+                const currentData = { ...data };
+                const courseIndex = currentData.courses.findIndex(c => c.id === courseId);
+                if (courseIndex !== -1) {
+                    currentData.courses[courseIndex].tasks.push(newTask);
+                }
+                const firestoreData = convertToFirestoreData(currentData);
+                await updateDoc(userDocRef, firestoreData);
+            } catch (error) {
+                console.error('Error saving task to Firestore:', error);
+            }
+        }
     };
 
     const updateData = (newData: Partial<AppData>) => {
@@ -343,11 +430,24 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         }));
     };
 
-    const updatePreferences = (preferences: Partial<UserPreferences>) => {
+    const updatePreferences = async (preferences: Partial<UserPreferences>) => {
+        // Update local state
         setData((prev) => ({
             ...prev,
             preferences: { ...prev.preferences, ...preferences }
         }));
+        
+        // Immediately sync with Firestore
+        if (userId && !isLoading) {
+            try {
+                const userDocRef = doc(db, 'users', userId);
+                const currentData = { ...data, preferences: { ...data.preferences, ...preferences } };
+                const firestoreData = convertToFirestoreData(currentData);
+                await updateDoc(userDocRef, firestoreData);
+            } catch (error) {
+                console.error('Error saving preferences to Firestore:', error);
+            }
+        }
     };
 
     const updateWeeklySchedule = (schedule: Partial<WeeklySchedule>) => {
@@ -718,12 +818,17 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     // Function to reset all app data
     const resetAppData = async () => {
         try {
-            // Clear all stored data
-            await AsyncStorage.removeItem(STORAGE_KEYS.APP_DATA);
+            if (!userId) return Promise.reject('No user ID found');
+            
+            // Clear stored data
             await AsyncStorage.removeItem(STORAGE_KEYS.CANVAS_TOKEN);
             
             // Reset state to defaults
             setData(defaultData);
+            
+            // Save default data to Firestore
+            const userDocRef = doc(db, 'users', userId);
+            await setDoc(userDocRef, defaultData);
             
             return Promise.resolve();
         } catch (error) {
