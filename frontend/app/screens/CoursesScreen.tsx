@@ -5,6 +5,7 @@ import { fetchEnrolledCourses } from '@/src/api/canvasApi';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData } from '@/src/context/AppDataContext';
 
+
 const CoursesScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const { data, setCourses } = useAppData();
     const token = data.token;

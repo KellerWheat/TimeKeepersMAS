@@ -1,364 +1,314 @@
-// screens/LoginScreen.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    TouchableOpacity, 
-    TextInput, 
-    Modal,
-    StyleSheet,
-    ScrollView,
-    Platform,
-    Linking,
-    Alert,
-    ActivityIndicator
-} from 'react-native';
-import { sharedStyles } from '@/src/sharedStyles';
-import { useAppData } from '@/src/context/AppDataContext';
-import { verifyCanvasToken } from '@/src/api/canvasApi';
+import React, { useState } from 'react';
+import { useFonts, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import AppLoading from 'expo-app-loading';
+import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { verifyCanvasToken } from '@/src/api/canvasApi';
+import { useAppData } from '@/src/context/AppDataContext';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '@/app/navigation';
 
-// Canvas settings
-const CANVAS_CONFIG = {
-    settingsUrl: 'https://gatech.instructure.com/profile/settings',
-    tokenStorageKey: 'canvas_access_token'
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Alert,
+  ActivityIndicator,
+  Linking,
+  ScrollView,
+} from 'react-native';
+
+const CANVAS_SETTINGS_URL = 'https://gatech.instructure.com/profile/settings';
+
+const LoginScreen = () => {
+  const [tokenInputVisible, setTokenInputVisible] = useState(false);
+  const [token, setTokenInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const openCanvasSettings = () => {
+    Linking.openURL(CANVAS_SETTINGS_URL).catch(() => {
+      Alert.alert('Error', 'Unable to open Canvas settings.');
+    });
+  };
+
+  type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
+const navigation = useNavigation<LoginScreenNavigationProp>();
+const { setToken, updateData, updateMetrics } = useAppData();
+
+const handleTokenSubmit = async () => {
+  if (!token.trim()) {
+    Alert.alert('Error', 'Please enter a valid Canvas token');
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const result = await verifyCanvasToken(token.trim());
+
+    if (result.valid) {
+      await AsyncStorage.setItem('canvas_access_token', token.trim());
+      setToken(token.trim());
+      updateData({ current_date: new Date() });
+
+      if (result.userData) {
+        updateMetrics({ userName: result.userData.name });
+      }
+
+      setTokenInputVisible(false);
+      navigation.navigate('Courses');
+    } else {
+      Alert.alert('Error', 'The Canvas token appears to be invalid. Please check and try again.');
+    }
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    Alert.alert('Error', 'Could not verify token. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
 };
 
-const LoginScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-    const { setToken, updateData, updateMetrics } = useAppData();
-    const [tokenInputVisible, setTokenInputVisible] = useState(false);
-    const [tokenInput, setTokenInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasSavedToken, setHasSavedToken] = useState(false);
-    const [savedToken, setSavedToken] = useState('');
+  const [fontsLoaded] = useFonts({
+    Inter_600SemiBold,
+  });
+  
+  if (!fontsLoaded) {
+    return <AppLoading />;
+  }
 
-    useEffect(() => {
-        // Check for existing token on mount
-        checkExistingToken();
-    }, []);
+  return (
+    <View style={styles.container}>
+      
+      <View style={styles.logoContainer}>
+        <Feather name="clock" size={82} color="white" style={styles.logoIcon} />
+        <Text style={styles.logo}>ChronoTask</Text>
+      </View>
 
-    const checkExistingToken = async () => {
-        try {
-            const token = await AsyncStorage.getItem(CANVAS_CONFIG.tokenStorageKey);
-            if (token) {
-                setIsLoading(true);
-                try {
-                    // Verify the stored token is still valid
-                    const result = await verifyCanvasToken(token);
-                    
-                    if (result.valid) {
-                        // If we have a valid token, store it but don't navigate automatically
-                        setSavedToken(token);
-                        setHasSavedToken(true);
-                    } else {
-                        // Token is invalid, show instructions to get a new one
-                        console.log('Stored token is invalid, requesting new token');
-                        setTokenInputVisible(true);
-                    }
-                } catch (error) {
-                    console.error('Error verifying stored token:', error);
-                    // On verification error, let the user enter a token manually
-                    setTokenInputVisible(true);
-                } finally {
-                    setIsLoading(false);
-                }
-            }
-        } catch (error) {
-            console.error('Error checking token:', error);
-        }
-    };
 
-    const continueWithSavedToken = () => {
-        setToken(savedToken);
-        updateData({ current_date: new Date() });
-        navigation.navigate('Courses');
-    };
 
-    const saveAndUseToken = async (token: string) => {
-        try {
-            await AsyncStorage.setItem(CANVAS_CONFIG.tokenStorageKey, token);
-            setToken(token);
-            updateData({ current_date: new Date() });
-            // Get user data from the token verification response
-            const result = await verifyCanvasToken(token);
-            if (result.valid && result.userData) {
-                updateMetrics({ userName: result.userData.name });
-            }
-            setTokenInputVisible(false); // Close the modal
-            navigation.navigate('Courses');
-        } catch (error) {
-            console.error('Error saving token:', error);
-            Alert.alert('Error', 'Failed to save your token. Please try again.');
-        }
-    };
+      <Text style={styles.subtitle}>Sign in to connect{'\n'}with Canvas</Text>
+      <View style={styles.buttonSpacer} />
 
-    const handleTokenSubmit = async () => {
-        if (!tokenInput.trim()) {
-            Alert.alert('Error', 'Please enter a valid Canvas token');
-            return;
-        }
-        
-        setIsLoading(true);
-        try {
-            // Verify the token using our proxy-enabled function
-            const result = await verifyCanvasToken(tokenInput.trim());
-            
-            if (result.valid) {
-                saveAndUseToken(tokenInput.trim());
-            } else {
-                Alert.alert('Error', 'The Canvas token appears to be invalid. Please check and try again.');
-            }
-        } catch (error) {
-            console.error('Error verifying token:', error);
-            Alert.alert('Error', 'Could not verify token. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => setTokenInputVisible(true)}
+      >
+        <Text style={styles.primaryButtonText}>Sign in with Canvas</Text>
+      </TouchableOpacity>
 
-    const openCanvasSettings = () => {
-        Linking.openURL(CANVAS_CONFIG.settingsUrl).catch((err) => {
-            console.error('Error opening Canvas settings:', err);
-            Alert.alert('Error', 'Could not open Canvas settings. Please navigate to Canvas settings manually.');
-        });
-    };
-
-    return (
-        <View style={sharedStyles.container}>
-            <View style={styles.headerContainer}>
-                <Text style={sharedStyles.screenTitle}>Canvas Login</Text>
-                <TouchableOpacity 
-                    style={styles.settingsButton}
-                    onPress={() => navigation.navigate('Settings')}
-                >
-                    <Text style={styles.settingsIcon}>⚙️</Text>
-                </TouchableOpacity>
-            </View>
-            <Text style={sharedStyles.text}>Welcome to Canvas. Please log in to continue.</Text>
-            
-            {/* Continue with Saved Token button */}
-            {hasSavedToken && (
-                <TouchableOpacity 
-                    style={[sharedStyles.button, styles.continueButton]} 
-                    onPress={continueWithSavedToken}
-                    disabled={isLoading}
-                >
-                    <Text style={sharedStyles.buttonText}>
-                        Continue with Saved Token
-                    </Text>
-                </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-                style={[sharedStyles.button, styles.tokenButton]} 
-                onPress={() => setTokenInputVisible(true)}
-                disabled={isLoading}
-            >
-                <Text style={sharedStyles.buttonText}>
-                    Login with Canvas Token
-                </Text>
-            </TouchableOpacity>
-
-            {/* Token Input Modal */}
-            <Modal
-                visible={tokenInputVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setTokenInputVisible(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Enter Canvas Access Token</Text>
-                        
-                        <Text style={styles.tokenInstructions}>
-                            To get your Canvas access token:
-                        </Text>
-                        
-                        <View style={styles.instructionsContainer}>
-                            <Text style={styles.tokenInstructions}>
-                                1. Click the button below to open Canvas Settings
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                2. Login to Georgia Tech Canvas if needed
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                3. Scroll down to "Approved Integrations"
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                4. Click "+ New Access Token"
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                5. Enter "TimeKeepers" as the purpose
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                6. Click "Generate Token"
-                            </Text>
-                            <Text style={styles.tokenInstructions}>
-                                7. Copy your token and paste it below
-                            </Text>
-                        </View>
-                        
-                        <TouchableOpacity 
-                            style={styles.openSettingsButton}
-                            onPress={openCanvasSettings}
-                        >
-                            <Text style={styles.settingsButtonText}>Open Canvas Settings</Text>
-                        </TouchableOpacity>
-                        
-                        <TextInput
-                            style={styles.tokenInput}
-                            value={tokenInput}
-                            onChangeText={setTokenInput}
-                            placeholder="Paste your Canvas token here"
-                            placeholderTextColor="#999"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            editable={!isLoading}
-                        />
-                        
-                        <View style={styles.modalButtonContainer}>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.cancelButton]} 
-                                onPress={() => setTokenInputVisible(false)}
-                                disabled={isLoading}
-                            >
-                                <Text style={styles.modalButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            
-                            {isLoading ? (
-                                <View style={[styles.modalButton, styles.loadingButton]}>
-                                    <ActivityIndicator color="#fff" size="small" />
-                                </View>
-                            ) : (
-                                <TouchableOpacity 
-                                    style={[styles.modalButton, styles.confirmButton]} 
-                                    onPress={handleTokenSubmit}
-                                >
-                                    <Text style={styles.modalButtonText}>Submit</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+      <Modal visible={tokenInputVisible} transparent animationType="slide">
+  <View style={styles.modalBackground}>
+    <View style={styles.modalTitleBox}>
+      <Text style={styles.modalTitleText}>Enter Canvas{'\n'}Access Token</Text>
+    </View>
+    <View style={styles.modalContainer}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 10 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.instructionsBox}>
+          <Text style={styles.instruction}>1. Tap Open Canvas Settings</Text>
+          <Text style={styles.instruction}>2. Log in if prompted</Text>
+          <Text style={styles.instruction}>3. Scroll to "Approved Integrations"</Text>
+          <Text style={styles.instruction}>4. Tap "+ New Access Token"</Text>
+          <Text style={styles.instruction}>5. Set purpose as "TimeKeepers"</Text>
+          <Text style={styles.instruction}>6. Tap "Generate Token"</Text>
+          <Text style={styles.instruction}>7. Paste your token below</Text>
         </View>
-    );
+
+        <TouchableOpacity
+  style={styles.openCanvasButton}
+  onPress={openCanvasSettings}
+  disabled={isLoading}
+>
+  <Text style={styles.openCanvasButtonText}>Open Canvas Settings</Text>
+</TouchableOpacity>
+
+<TextInput
+  style={styles.tokenInput}
+  placeholder="Access token"
+  placeholderTextColor="#999"
+  value={token}
+  onChangeText={setTokenInput}
+  editable={!isLoading}
+/>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => setTokenInputVisible(false)}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleTokenSubmit}
+            disabled={isLoading}
+          >
+            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Submit</Text>}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    headerContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-        position: 'relative',
-    },
-    settingsButton: {
-        position: 'absolute',
-        right: 0,
-        padding: 8,
-    },
-    settingsIcon: {
-        fontSize: 16,
-    },
-    tokenButton: {
-        marginTop: 20,
-        backgroundColor: '#3498db',
-    },
-    continueButton: {
-        marginTop: 20,
-        backgroundColor: '#27ae60',
-    },
-    // Token Input styles
-    tokenInput: {
-        width: '100%',
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 12,
-        marginVertical: 16,
-        fontSize: 16,
-    },
-    instructionsContainer: {
-        width: '100%',
-        backgroundColor: '#f8f9fa',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
-    },
-    tokenInstructions: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 6,
-    },
-    openSettingsButton: {
-        backgroundColor: '#2980b9',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 8,
-        width: '100%',
-        alignItems: 'center',
-    },
-    settingsButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    // Modal styles
-    modalContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 10,
-        padding: 20,
-        width: '90%',
-        maxWidth: 400,
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 15,
-        color: '#2c3e50',
-    },
-    modalButtonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-    },
-    modalButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 5,
-        minWidth: 100,
-        alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#e74c3c',
-        marginRight: 10,
-    },
-    confirmButton: {
-        backgroundColor: '#2ecc71',
-        marginLeft: 10,
-    },
-    modalButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    loadingButton: {
-        backgroundColor: '#7f8c8d',
-        marginLeft: 10,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 5,
-        minWidth: 100,
-        alignItems: 'center',
-    }
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  logo: {
+    fontSize: 32,
+    color: '#fff',
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  subtitle: {
+    color: '#cbd5e1',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  primaryButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+  padding: 20,
+  borderBottomLeftRadius: 16,
+  borderBottomRightRadius: 16,
+  width: '60%',
+  maxWidth: 250,
+  elevation: 5,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 3.84,
+  },
+  modalTitle: {
+    color: '#070c15',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalTitleBox: {
+    backgroundColor: '#070c15', 
+  paddingTop: 20,
+  paddingBottom: 12,
+  paddingHorizontal: 24,
+  borderTopLeftRadius: 16,
+  borderTopRightRadius: 16,
+  width: '60%',
+  maxWidth: 250,
+  alignItems: 'center',
+  zIndex: 2,
+  },
+  modalTitleText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  instructionsBox: {
+    marginBottom: 16,
+  },
+  instruction: {
+    color: '#1e293b',
+    fontSize: 14,
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  tokenInput: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  openCanvasButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  
+  openCanvasButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+
+  cancelButton: {
+    backgroundColor: '#1e293b',
+    paddingVertical: 10,
+    borderRadius: 6,
+    flex: 1,
+  },
+  submitButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    borderRadius: 6,
+    flex: 1,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  buttonSpacer: {
+    height: 100,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: -60,
+  },
+  logoIcon: {
+    width: 80,
+    height: 80,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  clockIcon: {
+    marginBottom: 8,
+    transform: [{ scaleY: 1.2 }, { scaleX: 0.9 }],
+  },
+  
 });
 
 export default LoginScreen;
