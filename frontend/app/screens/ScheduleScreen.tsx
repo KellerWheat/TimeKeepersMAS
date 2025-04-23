@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, TimeBlock, WeeklySchedule } from '@/src/context/AppDataContext';
+import '@/src/utils/uuidPolyfill'; // Import polyfill before uuid
 import { v4 as uuidv4 } from 'uuid';
 import { StackNavigationProps } from '../navigation';
 import { formatMinutes } from '@/src/utils/timeUtils';

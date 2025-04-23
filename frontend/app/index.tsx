@@ -1,5 +1,6 @@
 // index.tsx
+import '@/src/utils/uuidPolyfill'; // Import polyfill at the app's entry point
 import { registerRootComponent } from 'expo';
-import PhoneFrame from './PhoneFrame';
+import App from './App';
 
-registerRootComponent(PhoneFrame);
+registerRootComponent(App);

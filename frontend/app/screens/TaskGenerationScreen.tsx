@@ -5,6 +5,7 @@ import { fetchEnrolledCourses, fetchCourseDocuments } from '@/src/api/canvasApi'
 import { generateDocumentSummary, batchGenerateTasks, processJsonTaskResponse } from '@/src/api/llmApi';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, Document, Course } from '@/src/context/AppDataContext';
+import '@/src/utils/uuidPolyfill'; // Import polyfill before uuid
 import { v4 as uuidv4 } from 'uuid';
 
 // Debug mode for testing with sample JSON

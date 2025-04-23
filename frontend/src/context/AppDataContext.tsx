@@ -2,6 +2,7 @@ import React, { createContext, useState, ReactNode, useContext, useEffect } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import '../utils/uuidPolyfill'; // Import polyfill before uuid
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Subtask {

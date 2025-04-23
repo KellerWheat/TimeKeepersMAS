@@ -4,6 +4,7 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, Modal, StyleSheet, S
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, Task, Subtask, Course } from '@/src/context/AppDataContext';
+import '@/src/utils/uuidPolyfill'; // Import polyfill before uuid
 import { v4 as uuidv4 } from 'uuid';
 import { StackNavigationProps } from '../navigation';
 
