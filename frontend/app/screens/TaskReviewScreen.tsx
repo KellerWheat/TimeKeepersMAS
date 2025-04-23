@@ -4,6 +4,7 @@ import { View, Text, FlatList, TextInput, TouchableOpacity, Modal, StyleSheet, S
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { sharedStyles } from '@/src/sharedStyles';
 import { useAppData, Task, Subtask, Course } from '@/src/context/AppDataContext';
+import '@/src/utils/uuidPolyfill'; // Import polyfill before uuid
 import { v4 as uuidv4 } from 'uuid';
 import { StackNavigationProps } from '../navigation';
 
@@ -70,7 +71,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
                     />
                 ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={sharedStyles.text}>
+                        <Text style={[sharedStyles.text, { fontSize: 12, textAlign: 'left' }]}>
                             {item.description || 'Subtask description'}
                         </Text>
                         <TouchableOpacity onPress={() => setEditingSubtaskId(item.id)}>
@@ -83,23 +84,23 @@ const TaskItem: React.FC<TaskItemProps> = ({
                         onPress={() => updateSubtask(courseId, task.id, item.id, { expected_time: (item.expected_time || 0) - 1 })}
                         style={sharedStyles.timeButton}
                     >
-                        <Text style={sharedStyles.timeButtonText}>-</Text>
+                        <Text style={[sharedStyles.timeButtonText, { fontSize: 12 }]}>-</Text>
                     </TouchableOpacity>
-                    <Text style={sharedStyles.timeValue}>{item.expected_time} hrs</Text>
+                    <Text style={[sharedStyles.timeValue, { fontSize: 12 }]}>{item.expected_time} hrs</Text>
                     <TouchableOpacity
                         onPress={() => updateSubtask(courseId, task.id, item.id, { expected_time: (item.expected_time || 0) + 1 })}
                         style={sharedStyles.timeButton}
                     >
-                        <Text style={sharedStyles.timeButtonText}>+</Text>
+                        <Text style={[sharedStyles.timeButtonText, { fontSize: 12 }]}>+</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={() => deleteSubtask(courseId, task.id, item.id)}
                         style={{ marginLeft: 8 }}
                     >
-                        <Text style={{ color: 'red', fontSize: 16 }}>✕</Text>
+                        <Text style={{ color: 'red', fontSize: 12 }}>✕</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onLongPress={drag} style={{ marginLeft: 8 }}>
-                        <Text style={{ color: '#2980b9', fontSize: 16 }}>↕</Text>
+                        <Text style={{ color: '#2980b9', fontSize: 12 }}>↕</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -112,13 +113,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 <TouchableOpacity onPress={() => toggleExpansion(task.id)} style={{ flex: 1 }}>
                     {editing?.editingDescription ? (
                         <TextInput
-                            style={[sharedStyles.text, sharedStyles.editInput]}
+                            style={[sharedStyles.text, sharedStyles.editInput, { color: '#000000' }]}
                             value={task.task_description}
                             onChangeText={(text) => updateTaskField(courseId, task.id, 'task_description', text)}
                             onBlur={() => finishEditing('editingDescription', task.id)}
                         />
                     ) : (
-                        <Text style={[sharedStyles.screenTitle, sharedStyles.taskTitle]}>
+                        <Text style={[sharedStyles.screenTitle, sharedStyles.taskTitle, { textAlign: 'left' }]}>
                             {task.task_description || 'Task Description'}{' '}
                             <Text onPress={() => toggleEditing(task.id, 'editingDescription')} style={sharedStyles.pencilSmall}>
                                 ✏️
@@ -126,7 +127,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
                         </Text>
                     )}
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => toggleApproval(courseId, task.id, !task.approved_by_user)}
                     style={{ marginHorizontal: 8 }}
                 >
@@ -138,24 +139,41 @@ const TaskItem: React.FC<TaskItemProps> = ({
                     <Text style={{ color: 'red', fontSize: 16, marginLeft: 8 }}>✕</Text>
                 </TouchableOpacity>
             </View>
-            <View style={[sharedStyles.taskHeader, { justifyContent: 'center' }]}>
-                {editing?.editingDueDate ? (
-                    <TextInput
-                        style={[sharedStyles.text, sharedStyles.editInput, { textAlign: 'center' }]}
-                        value={task.due_date}
-                        onChangeText={(text) => updateTaskField(courseId, task.id, 'due_date', text)}
-                        onBlur={() => finishEditing('editingDueDate', task.id)}
-                    />
-                ) : (
-                    <Text style={[sharedStyles.text, { textAlign: 'center' }]}>
-                        {task.due_date || 'No due date'}
-                    </Text>
-                )}
-                <TouchableOpacity onPress={() => toggleEditing(task.id, 'editingDueDate')}>
-                    <Text style={sharedStyles.pencilSmall}>✏️</Text>
-                </TouchableOpacity>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 }}>
+                {/* Course name on the left */}
+                <Text style={[sharedStyles.text, { fontSize: 12, color: '#666', textAlign: 'left', flex: 1 }]}>
+                    {courseName}
+                </Text>
+
+                {/* Due date + time on the right */}
+                <View style={{ alignItems: 'flex-end' }}>
+                    {editing?.editingDueDate ? (
+                        <TextInput
+                            style={[sharedStyles.text, sharedStyles.editInput, { fontSize: 12, textAlign: 'right', color: '#000' }]}
+                            value={task.due_date}
+                            onChangeText={(text) => updateTaskField(courseId, task.id, 'due_date', text)}
+                            onBlur={() => finishEditing('editingDueDate', task.id)}
+                        />
+                    ) : (
+                        <>
+                            <Text style={[sharedStyles.taskDate, { fontSize: 12 }]}>
+                                {task.due_date?.split('T')[0] || 'No due date'}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                {task.due_date?.includes('T') && (
+                                    <Text style={[sharedStyles.taskTime, { fontSize: 12, marginRight: 4 }]}>
+                                        {new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                )}
+                                <TouchableOpacity onPress={() => toggleEditing(task.id, 'editingDueDate')}>
+                                    <Text style={[sharedStyles.pencilSmall, { fontSize: 10 }]}>✏️</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
+                </View>
             </View>
-            <Text style={[sharedStyles.text, { textAlign: 'center', color: '#666' }]}>{courseName}</Text>
+
             {isExpanded && (
                 <>
                     <DraggableFlatList
@@ -242,24 +260,24 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
     maxViewDate.setDate(currentDate.getDate() + data.preferences.taskViewPeriodDays);
 
     // Get all tasks from all courses and sort by due date, filtering by the view period and excluding past due tasks
-    const allTasks = data.courses.flatMap(course => 
+    const allTasks = data.courses.flatMap(course =>
         course.tasks.map(task => ({
             ...task,
             courseId: course.id,
             courseName: course.name
         }))
     )
-    .filter(task => {
-        const taskDate = new Date(task.due_date);
-        // Only include tasks that:
-        // 1. Have a valid date
-        // 2. Are not past due (due date is on or after current date)
-        // 3. Are within the specified view period
-        return !isNaN(taskDate.getTime()) && 
-               taskDate >= currentDate && 
-               taskDate <= maxViewDate;
-    })
-    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+        .filter(task => {
+            const taskDate = new Date(task.due_date);
+            // Only include tasks that:
+            // 1. Have a valid date
+            // 2. Are not past due (due date is on or after current date)
+            // 3. Are within the specified view period
+            return !isNaN(taskDate.getTime()) &&
+                taskDate >= currentDate &&
+                taskDate <= maxViewDate;
+        })
+        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
 
     // Helper functions for TaskItem
     const toggleExpansion = (id: string) => {
@@ -305,7 +323,7 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
         // Get tomorrow's date
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const newTask: Task = {
             id: uuidv4(),
             type: 'assignment',
@@ -369,14 +387,12 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
 
     return (
         <View style={styles.container}>
-            <Text style={sharedStyles.screenTitle}>Review Your Tasks</Text>
-            
             <View style={styles.infoContainer}>
                 <Text style={styles.infoText}>
                     Approve the tasks you want to include in your schedule.
                 </Text>
             </View>
-            
+
             {allTasks.length === 0 ? (
                 <Text style={styles.noTasksText}>
                     No tasks available for review. Generate tasks from your courses first.
@@ -389,7 +405,7 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
                     style={styles.scrollContainer}
                 />
             )}
-            
+
             <View style={styles.buttonContainer}>
                 <TouchableOpacity
                     style={[
@@ -400,19 +416,19 @@ const TaskReviewScreen = ({ navigation }: TaskReviewScreenProps) => {
                     onPress={handleScheduleTasks}
                     disabled={isScheduling}
                 >
-                    <Text style={sharedStyles.buttonText}>
+                    <Text style={[sharedStyles.buttonText, { color: '#ffffff' }]}>
                         {isScheduling ? 'Scheduling...' : 'Schedule Approved Tasks'}
                     </Text>
                 </TouchableOpacity>
             </View>
-            
+
             <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setShowCourseModal(true)}
             >
                 <Text style={styles.addButtonText}>+</Text>
             </TouchableOpacity>
-            
+
             <CourseSelectionModal
                 visible={showCourseModal}
                 onClose={() => setShowCourseModal(false)}
@@ -431,13 +447,13 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        marginBottom: 16,
+        marginBottom: 10,
     },
     infoContainer: {
         backgroundColor: '#f5f5f5',
         padding: 16,
         borderRadius: 8,
-        marginBottom: 16,
+        marginBottom: 0,
         alignItems: 'center',
     },
     infoText: {
@@ -450,9 +466,9 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: 20,
         bottom: 80,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 35,
+        height: 35,
+        borderRadius: 20,
         backgroundColor: '#2c3e50',
         justifyContent: 'center',
         alignItems: 'center',
@@ -471,7 +487,7 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     scheduleButton: {
-        backgroundColor: '#009688',
+        backgroundColor: '#1e293b',
         paddingVertical: 12,
     },
     buttonDisabled: {

@@ -7,72 +7,73 @@ import Slider from '@react-native-community/slider';
 import { StackNavigationProps } from '../navigation';
 import { formatMinutes, getWeekDates } from '../../src/utils/timeUtils';
 
+
 // Day Navigation Component
 interface DayNavigationProps {
-  currentDate: Date;
-  onDateChange: (date: Date) => void;
-  hasEvents: (dateStr: string) => boolean;
+    currentDate: Date;
+    onDateChange: (date: Date) => void;
+    hasEvents: (dateStr: string) => boolean;
 }
 
 const DayNavigation = React.memo(({ currentDate, onDateChange, hasEvents }: DayNavigationProps) => {
-  // Format the current date for display, adjusting by 24 hours
-  const formattedDate = useMemo(() => {
-    const adjustedDate = new Date(currentDate);
-    adjustedDate.setHours(adjustedDate.getHours() - 24);
-    return adjustedDate.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short', 
-      day: 'numeric'
-    });
-  }, [currentDate]);
-  
-  // Check if current date has events
-  const currentDateStr = useMemo(() => currentDate.toISOString().split('T')[0], [currentDate]);
-  const currentHasEvents = useMemo(() => hasEvents(currentDateStr), [hasEvents, currentDateStr]);
-  
-  // Go to previous day
-  const goPrevDay = useCallback(() => {
-    const prevDay = new Date(currentDate);
-    prevDay.setDate(prevDay.getDate() - 1);
-    onDateChange(prevDay);
-  }, [currentDate, onDateChange]);
-  
-  // Go to next day
-  const goNextDay = useCallback(() => {
-    const nextDay = new Date(currentDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    onDateChange(nextDay);
-  }, [currentDate, onDateChange]);
-  
-  // Go to today
-  const goToday = useCallback(() => {
-    onDateChange(new Date());
-  }, [onDateChange]);
-  
-  return (
-    <View style={styles.dayNavigationContainer}>
-      <TouchableOpacity 
-        style={styles.navButton} 
-        onPress={goPrevDay}
-      >
-        <Text style={styles.navButtonText}>◀</Text>
-      </TouchableOpacity>
-      
-      <View style={styles.currentDateContainer}>
-        <TouchableOpacity onPress={goToday}>
-          <Text style={styles.currentDateText}>{formattedDate}</Text>
-        </TouchableOpacity>
-        {currentHasEvents && <View style={styles.dateEventIndicator} />}
-      </View>
-      
-      <TouchableOpacity 
-        style={styles.navButton} 
-        onPress={goNextDay}
-      >
-        <Text style={styles.navButtonText}>▶</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    // Format the current date for display, adjusting by 24 hours
+    const formattedDate = useMemo(() => {
+        const adjustedDate = new Date(currentDate);
+        adjustedDate.setHours(adjustedDate.getHours() - 24);
+        return adjustedDate.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        });
+    }, [currentDate]);
+
+    // Check if current date has events
+    const currentDateStr = useMemo(() => currentDate.toISOString().split('T')[0], [currentDate]);
+    const currentHasEvents = useMemo(() => hasEvents(currentDateStr), [hasEvents, currentDateStr]);
+
+    // Go to previous day
+    const goPrevDay = useCallback(() => {
+        const prevDay = new Date(currentDate);
+        prevDay.setDate(prevDay.getDate() - 1);
+        onDateChange(prevDay);
+    }, [currentDate, onDateChange]);
+
+    // Go to next day
+    const goNextDay = useCallback(() => {
+        const nextDay = new Date(currentDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        onDateChange(nextDay);
+    }, [currentDate, onDateChange]);
+
+    // Go to today
+    const goToday = useCallback(() => {
+        onDateChange(new Date());
+    }, [onDateChange]);
+
+    return (
+        <View style={styles.dayNavigationContainer}>
+            <TouchableOpacity
+                style={styles.navButton}
+                onPress={goPrevDay}
+            >
+                <Text style={styles.navButtonText}>◀</Text>
+            </TouchableOpacity>
+
+            <View style={styles.currentDateContainer}>
+                <TouchableOpacity onPress={goToday}>
+                    <Text style={styles.currentDateText}>{formattedDate}</Text>
+                </TouchableOpacity>
+                {currentHasEvents && <View style={styles.dateEventIndicator} />}
+            </View>
+
+            <TouchableOpacity
+                style={styles.navButton}
+                onPress={goNextDay}
+            >
+                <Text style={styles.navButtonText}>▶</Text>
+            </TouchableOpacity>
+        </View>
+    );
 });
 
 // Scheduled Subtask component to display on the daily view
@@ -85,9 +86,9 @@ interface ScheduledSubtaskProps {
     courseColor: string;
 }
 
-const ScheduledSubtask = React.memo(({ 
-    scheduledTime, 
-    subtask, 
+const ScheduledSubtask = React.memo(({
+    scheduledTime,
+    subtask,
     taskDescription,
     courseName,
     onPress,
@@ -95,25 +96,25 @@ const ScheduledSubtask = React.memo(({
 }: ScheduledSubtaskProps) => {
     const startTime = formatMinutes(scheduledTime.start_time);
     const endTime = formatMinutes(scheduledTime.end_time);
-    
+
     // Calculate height based on duration and completion percentage
     const durationMinutes = scheduledTime.end_time - scheduledTime.start_time;
     const remainingPercentage = 100 - subtask.current_percentage_completed;
     const scaledDurationMinutes = Math.max(Math.ceil(durationMinutes * (remainingPercentage / 100)), 180);
     // Ensure minimum height of 1 hour (60px) regardless of completion percentage
     const heightPx = Math.max(scaledDurationMinutes / 60 * 60, 60);
-    
+
     // Calculate top position based on start time from day start
     const { data } = useAppData();
     const dayStartMinutes = data.preferences.calendarDayStartHour * 60;
     const topPosition = (scheduledTime.start_time - dayStartMinutes) / 60 * 60;
-    
+
     return (
-        <TouchableOpacity 
+        <TouchableOpacity
             style={[
-                styles.scheduledSubtask, 
-                { 
-                    height: heightPx, 
+                styles.scheduledSubtask,
+                {
+                    height: heightPx,
                     top: topPosition,
                     backgroundColor: courseColor || '#90caf9',
                     borderLeftWidth: scheduledTime.user_set ? 4 : 0,
@@ -126,9 +127,9 @@ const ScheduledSubtask = React.memo(({
             <Text style={styles.subtaskDescription} numberOfLines={1}>{subtask.description}</Text>
             <Text style={styles.taskDescription} numberOfLines={1}>{taskDescription}</Text>
             <View style={styles.progressContainer}>
-                <View 
+                <View
                     style={[
-                        styles.progressBar, 
+                        styles.progressBar,
                         { width: `${subtask.current_percentage_completed}%` }
                     ]}
                 />
@@ -171,44 +172,44 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     const [progress, setProgress] = useState(0);
     const [showDayPicker, setShowDayPicker] = useState(false);
     const { data } = useAppData();
-    
+
     useEffect(() => {
         if (subtask) {
             setProgress(subtask.current_percentage_completed || 0);
         }
     }, [subtask]);
-    
+
     if (!scheduledTime || !subtask || !courseId || !taskId) return null;
-    
+
     const handleSave = () => {
         updateProgress(
-            subtask.id, 
-            courseId, 
-            taskId, 
+            subtask.id,
+            courseId,
+            taskId,
             progress
         );
         onClose();
     };
-    
+
     // Get available days up to the due date
     const getAvailableDays = () => {
         const course = data.courses.find(c => c.id === courseId);
         const task = course?.tasks.find(t => t.id === taskId);
         if (!task?.due_date) return [];
-        
+
         const dueDate = new Date(task.due_date);
         const currentDate = new Date(data.current_date);
         const days: string[] = [];
-        
+
         // Add days from current date to due date
         while (currentDate <= dueDate) {
             days.push(currentDate.toISOString().split('T')[0]);
             currentDate.setDate(currentDate.getDate() + 1);
         }
-        
+
         return days;
     };
-    
+
     return (
         <Modal
             visible={visible}
@@ -217,28 +218,41 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             onRequestClose={onClose}
         >
             <View style={sharedStyles.modalOverlay}>
-                <View style={[sharedStyles.modalContent, styles.modalContent]}>
-                    <Text style={styles.modalTitle}>{subtask.description}</Text>
-                    <Text style={styles.modalTaskName}>{taskDescription}</Text>
-                    <Text style={styles.modalCourseName}>{courseName}</Text>
-                    
+                <View style={[
+                    sharedStyles.modalContent,
+                    styles.modalContent,
+                    {
+                        maxHeight: '90%',
+                        width: '90%',
+                        alignSelf: 'center',
+                        borderRadius: 12,
+                    }
+                ]}>
+                    <Text style={[styles.modalTitle, { color: '#ffffff' }]}>
+                        {subtask.description}
+                    </Text>
+                    <Text style={[styles.modalTaskName, { color: '#ffffff' }]}>{taskDescription}</Text>
+                    <Text style={[styles.modalCourseName, { color: '#ffffff' }]}>
+                        {courseName}
+                    </Text>
+
                     <View style={styles.modalTimeInfo}>
                         <Text style={styles.modalScheduledDay}>
-                            {new Date(scheduledTime.day).toLocaleDateString(undefined, { 
-                                weekday: 'long', 
-                                month: 'short', 
-                                day: 'numeric' 
+                            {new Date(scheduledTime.day).toLocaleDateString(undefined, {
+                                weekday: 'long',
+                                month: 'short',
+                                day: 'numeric'
                             })}
                         </Text>
                         <Text style={styles.modalScheduledTime}>
                             {formatMinutes(scheduledTime.start_time)} - {formatMinutes(scheduledTime.end_time)}
-                            {scheduledTime.user_set && 
+                            {scheduledTime.user_set &&
                                 <Text style={styles.userSetModalLabel}> (Manually Set)</Text>
                             }
                         </Text>
                     </View>
-                    
-                    <Text style={styles.progressLabel}>
+
+                    <Text style={[styles.progressLabel, { color: '#ffffff' }]}>
                         Update Progress: {progress.toFixed(0)}%
                     </Text>
                     <Slider
@@ -251,72 +265,123 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         minimumTrackTintColor="#2980b9"
                         maximumTrackTintColor="#d3d3d3"
                     />
-                    
+
                     <View style={styles.modalButtonRow}>
-                        <TouchableOpacity 
-                            style={sharedStyles.button} 
+                        <TouchableOpacity
+                            style={sharedStyles.button}
                             onPress={() => setShowDayPicker(true)}
                         >
                             <Text style={sharedStyles.buttonText}>Change Day</Text>
                         </TouchableOpacity>
                     </View>
-                    
-                    <TouchableOpacity 
-                        style={sharedStyles.button} 
+
+                    <TouchableOpacity
+                        style={sharedStyles.button}
                         onPress={handleSave}
                     >
                         <Text style={sharedStyles.buttonText}>Save Progress and Close</Text>
                     </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        style={styles.closeButton} 
+
+                    <TouchableOpacity
+                        style={styles.closeButton}
                         onPress={onClose}
                     >
                         <Text style={styles.closeButtonText}>Close</Text>
                     </TouchableOpacity>
-                    
+
                     {showDayPicker && (
                         <Modal
-                            visible={showDayPicker}
-                            transparent={true}
-                            animationType="slide"
-                            onRequestClose={() => setShowDayPicker(false)}
-                        >
-                            <View style={sharedStyles.modalOverlay}>
-                                <View style={[sharedStyles.modalContent, styles.modalContent]}>
-                                    <Text style={styles.modalTitle}>Select New Day</Text>
-                                    <ScrollView style={styles.dayPickerScroll}>
-                                        {getAvailableDays().map(day => (
-                                            <TouchableOpacity
-                                                key={day}
-                                                style={[
-                                                    styles.dayPickerItem,
-                                                    day === scheduledTime.day && styles.dayPickerItemSelected
-                                                ]}
-                                                onPress={() => {
-                                                    changeDay(day);
-                                                    setShowDayPicker(false);
-                                                }}
-                                            >
-                                                <Text style={styles.dayPickerItemText}>
-                                                    {new Date(day).toLocaleDateString(undefined, {
-                                                        weekday: 'long',
-                                                        month: 'short',
-                                                        day: 'numeric'
-                                                    })}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                    <TouchableOpacity 
-                                        style={styles.closeButton} 
-                                        onPress={() => setShowDayPicker(false)}
-                                    >
-                                        <Text style={styles.closeButtonText}>Cancel</Text>
-                                    </TouchableOpacity>
-                                </View>
+                        visible={visible}
+                        transparent
+                        animationType="slide"
+                        onRequestClose={onClose}
+                      >
+                        <View style={sharedStyles.modalOverlay}>
+                          <ScrollView
+                            contentContainerStyle={{
+                              flexGrow: 1,
+                              justifyContent: 'center',
+                              padding: 20,
+                            }}
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            <View style={{
+                              width: '90%',
+                              maxHeight: '90%',
+                              alignSelf: 'center',
+                              backgroundColor: '#1c2431',
+                              padding: 16,
+                              borderRadius: 12,
+                            }}>
+                              <Text style={[styles.modalTitle, { color: '#ffffff' }]}>
+                                {subtask.description}
+                              </Text>
+                              
+                              <Text style={[styles.modalTaskName, { color: '#ffffff' }]}>
+                                {taskDescription}
+                              </Text>
+                              
+                              <Text style={[styles.modalCourseName, { color: '#ffffff' }]}>
+                                {courseName}
+                              </Text>
+                      
+                              <View style={styles.modalTimeInfo}>
+                                <Text style={styles.modalScheduledDay}>
+                                  {new Date(scheduledTime.day).toLocaleDateString(undefined, { 
+                                    weekday: 'long', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                  })}
+                                </Text>
+                                <Text style={styles.modalScheduledTime}>
+                                  {formatMinutes(scheduledTime.start_time)} - {formatMinutes(scheduledTime.end_time)}
+                                  {scheduledTime.user_set && (
+                                    <Text style={styles.userSetModalLabel}> (Manually Set)</Text>
+                                  )}
+                                </Text>
+                              </View>
+                      
+                              <Text style={[styles.progressLabel, { color: '#ffffff' }]}>
+                                Update Progress: {progress.toFixed(0)}%
+                              </Text>
+                              
+                              <Slider
+                                style={styles.progressSlider}
+                                minimumValue={0}
+                                maximumValue={100}
+                                step={5}
+                                value={progress}
+                                onValueChange={setProgress}
+                                minimumTrackTintColor="#2980b9"
+                                maximumTrackTintColor="#d3d3d3"
+                              />
+                      
+                              <View style={styles.modalButtonRow}>
+                                <TouchableOpacity 
+                                  style={sharedStyles.button} 
+                                  onPress={() => setShowDayPicker(true)}
+                                >
+                                  <Text style={sharedStyles.buttonText}>Change Day</Text>
+                                </TouchableOpacity>
+                              </View>
+                      
+                              <TouchableOpacity 
+                                style={sharedStyles.button} 
+                                onPress={handleSave}
+                              >
+                                <Text style={sharedStyles.buttonText}>Save Progress and Close</Text>
+                              </TouchableOpacity>
+                      
+                              <TouchableOpacity 
+                                style={styles.closeButton} 
+                                onPress={onClose}
+                              >
+                                <Text style={styles.closeButtonText}>Close</Text>
+                              </TouchableOpacity>
                             </View>
-                        </Modal>
+                          </ScrollView>
+                        </View>
+                      </Modal>
                     )}
                 </View>
             </View>
@@ -341,25 +406,25 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
     const [selectedCourseId, setSelectedCourseId] = useState('');
     const [selectedTaskId, setSelectedTaskId] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    
+
     // Store a reference to the date when the calendar was generated
     const lastRefreshRef = useRef(data.current_date.toISOString());
     const hasRunInitialSchedule = useRef(false);
-    
+
     // Create a day timeline view
     const dayStartHour = data.preferences.calendarDayStartHour;
     const dayEndHour = data.preferences.calendarDayEndHour;
-    
+
     // Check if a date has events - memoized to prevent recalculation
     const checkDateHasEvents = useCallback((dateStr: string): boolean => {
         return data.scheduledTasks.some(task => task.day === dateStr);
     }, [data.scheduledTasks]);
-    
+
     // Update selectedDateStr when selectedDate changes
     useEffect(() => {
         setSelectedDateStr(selectedDate.toISOString().split('T')[0]);
     }, [selectedDate]);
-    
+
     // Initialize calendar once on first render
     useEffect(() => {
         // Run auto-schedule ONLY if we haven't yet AND there are no scheduled tasks
@@ -375,7 +440,7 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
                 lastRefreshRef.current = data.current_date.toISOString();
                 hasRunInitialSchedule.current = true;
             }, 300);
-            
+
             return () => clearTimeout(timerId);
         } else {
             // Just mark as initialized without scheduling
@@ -386,7 +451,7 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
         // Only run this effect once on component mount
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    
+
     // Map to get subtasks and task info for each scheduled time - heavily memoized
     const scheduledItemsInfo = useMemo(() => {
         return data.scheduledTasks
@@ -396,10 +461,10 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
                 const course = data.courses.find(c => c.id === scheduledTime.course_id);
                 const task = course?.tasks.find(t => t.id === scheduledTime.task_id);
                 const subtask = task?.subtasks.find(s => s.id === scheduledTime.subtask_id);
-                
+
                 // Get a color based on course index if no color property exists
                 const courseColor = '#90caf9'; // Default blue color
-                
+
                 return {
                     scheduledTime,
                     subtask,
@@ -412,12 +477,12 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
             })
             .filter(item => item.subtask); // Only include items where subtask was found
     }, [data.scheduledTasks, data.courses, selectedDateStr]);
-    
+
     // Create a day timeline view
     const hourHeight = 70; // Increase from 60px to 70px per hour to have more space
     const totalHours = dayEndHour - dayStartHour;
     const timelineHeight = totalHours * hourHeight;
-    
+
     // Generate hour markers for the timeline
     const hourMarkers = useMemo(() => {
         const markers = [];
@@ -433,26 +498,26 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
         }
         return markers;
     }, [dayStartHour, dayEndHour, hourHeight]);
-    
+
     // Callback handlers - memoized to prevent rerenders
     const handleDateChange = useCallback((date: Date) => {
         setSelectedDate(date);
     }, []);
-    
+
     const navigateToTaskReview = useCallback(() => {
         navigation.navigate('TaskReview');
     }, [navigation]);
-    
+
     const navigateToSchedule = useCallback(() => {
         navigation.navigate('Schedule');
     }, [navigation]);
-    
+
     const handleSubtaskPress = useCallback((
-        scheduledTime: ScheduledTime, 
-        subtask: Subtask, 
-        taskDescription: string, 
-        courseName: string, 
-        courseId: string, 
+        scheduledTime: ScheduledTime,
+        subtask: Subtask,
+        taskDescription: string,
+        courseName: string,
+        courseId: string,
         taskId: string
     ) => {
         setSelectedScheduledTime(scheduledTime);
@@ -463,7 +528,7 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
         setSelectedTaskId(taskId);
         setShowTaskModal(true);
     }, []);
-    
+
     const handleChangeDay = useCallback((day: string) => {
         if (selectedSubtask && selectedCourseId && selectedTaskId && selectedScheduledTime) {
             manuallyScheduleTask(
@@ -482,7 +547,7 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
             setShowTaskModal(false);
         }
     }, [selectedSubtask, selectedCourseId, selectedTaskId, selectedScheduledTime, manuallyScheduleTask]);
-    
+
     const handleManualAutoSchedule = useCallback(() => {
         setIsLoading(true);
         // Delay to allow loading state to render
@@ -490,26 +555,26 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
             autoScheduleTasks(true); // Force reschedule all tasks
             setIsLoading(false);
         }, 300);
-        
+
         return () => clearTimeout(timerId);
     }, [autoScheduleTasks]);
-    
+
     // Close the task modal callback
     const handleCloseTaskModal = useCallback(() => {
         setShowTaskModal(false);
     }, []);
-    
+
     // Handle task completion and possible reschedule
     const handleProgressUpdate = useCallback((
-        subtaskId: string, 
-        courseId: string, 
-        taskId: string, 
+        subtaskId: string,
+        courseId: string,
+        taskId: string,
         progress: number
     ) => {
         updateSubtask(courseId, taskId, subtaskId, { current_percentage_completed: progress });
         handleCloseTaskModal();
     }, [updateSubtask, handleCloseTaskModal]);
-    
+
     // Memoize the scheduled items to prevent unnecessary re-renders
     const scheduledItems = useMemo(() => {
         return scheduledItemsInfo.map((item, index) => (
@@ -531,16 +596,16 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
             />
         ));
     }, [scheduledItemsInfo, handleSubtaskPress]);
-    
+
     return (
-        <View style={sharedStyles.container}>
+        <View style={[sharedStyles.container, { backgroundColor: '#ffffff' }]}>
             {/* Day Navigation */}
-            <DayNavigation 
+            <DayNavigation
                 currentDate={selectedDate}
                 onDateChange={handleDateChange}
                 hasEvents={checkDateHasEvents}
             />
-            
+
             <View style={styles.dayTimelineContainer}>
                 {isLoading ? (
                     <View style={styles.loadingContainer}>
@@ -551,44 +616,42 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
                     <ScrollView style={{ flex: 1 }} removeClippedSubviews={true}>
                         <View style={[styles.timeline, { height: timelineHeight }]}>
                             {hourMarkers}
-                            
-                            {/* Render scheduled items */}
                             {scheduledItems}
                         </View>
                     </ScrollView>
                 )}
-                
+
                 {!isLoading && scheduledItemsInfo.length === 0 && (
                     <View style={styles.noTasksContainer}>
                         <Text style={styles.noTasksText}>No tasks scheduled for this day</Text>
                     </View>
                 )}
             </View>
-            
+
             <View style={styles.footerButtons}>
-                <TouchableOpacity 
-                    style={styles.iconButton} 
+                <TouchableOpacity
+                    style={styles.iconButton}
                     onPress={navigateToTaskReview}
                 >
                     <Text style={styles.iconText}>✏️</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                    style={styles.iconButton} 
+
+                <TouchableOpacity
+                    style={styles.iconButton}
                     onPress={navigateToSchedule}
                 >
                     <Text style={styles.iconText}>⏰</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                    style={styles.iconButton} 
+
+                <TouchableOpacity
+                    style={styles.iconButton}
                     onPress={handleManualAutoSchedule}
                     disabled={isLoading}
                 >
                     <Text style={styles.iconText}>{isLoading ? '⏳' : '🔄'}</Text>
                 </TouchableOpacity>
             </View>
-            
+
             <TaskDetailModal
                 visible={showTaskModal}
                 onClose={handleCloseTaskModal}
@@ -608,14 +671,14 @@ const CalendarScreen: React.FC<CalendarScreenProps> = ({ navigation }) => {
 export default CalendarScreen;
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        paddingTop: 10 
+    container: {
+        flex: 1,
+        paddingTop: 10
     },
-    title: { 
-        fontSize: 24, 
-        textAlign: 'center', 
-        marginBottom: 20 
+    title: {
+        fontSize: 24,
+        textAlign: 'center',
+        marginBottom: 20
     },
     dayNavigationContainer: {
         flexDirection: 'row',
@@ -676,11 +739,12 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: 70,
+        paddingTop: 10,
     },
     hourText: {
         position: 'absolute',
         left: 5,
-        top: -10,
+        top: -6,
         fontSize: 12,
         color: '#666',
     },
@@ -796,7 +860,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
     },
-    
+
     // Modal styles
     modalContent: {
         paddingVertical: 20,

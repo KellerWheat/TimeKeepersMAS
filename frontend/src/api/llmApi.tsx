@@ -1,3 +1,4 @@
+import '@/src/utils/uuidPolyfill'; // Import polyfill before uuid
 import { Document, Task, Subtask, Course } from '@/src/context/AppDataContext';
 import { v4 as uuidv4 } from 'uuid';
 

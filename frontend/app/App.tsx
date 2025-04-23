@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
+
 import LoginScreen from './screens/LoginScreen';
 import CoursesScreen from './screens/CoursesScreen';
 import TaskGenerationScreen from './screens/TaskGenerationScreen';
@@ -26,7 +27,7 @@ export default function App() {
                         ...navHeader,
                     }}
                 >
-                    <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Canvas Login' }} />
+                    <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
                     <Stack.Screen name="Courses" component={CoursesScreen} options={{ title: 'Your Courses' }} />
                     <Stack.Screen name="TaskGeneration" component={TaskGenerationScreen} options={{ title: 'Generate Tasks' }} />
                     <Stack.Screen name="TaskReview" component={TaskReviewScreen} options={{ title: 'Review Tasks' }} />
